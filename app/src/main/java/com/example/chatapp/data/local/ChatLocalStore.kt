@@ -1,0 +1,375 @@
+package com.example.chatapp.data.local
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import com.example.chatapp.data.model.ChatMessage
+import com.example.chatapp.data.model.MessageRole
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.withContext
+
+data class ConversationSummary(
+    val id: Long,
+    val title: String,
+    val preview: String,
+    val updatedAt: Long,
+    val messageCount: Int
+)
+
+data class ProfileStats(
+    val conversationCount: Int,
+    val messageCount: Int,
+    val userMessages: Int,
+    val aiMessages: Int
+)
+
+@Singleton
+class ChatLocalStore @Inject constructor(
+    @ApplicationContext context: Context
+) {
+    private val dbHelper = ChatDatabaseHelper(context)
+    private val changeCounter = MutableStateFlow(0L)
+
+    suspend fun ensureConversation(conversationId: Long?): Long = withContext(Dispatchers.IO) {
+        when {
+            conversationId != null && conversationExists(conversationId) -> conversationId
+            else -> latestConversationId() ?: createConversation()
+        }
+    }
+
+    fun observeConversationMessages(conversationId: Long): Flow<List<ChatMessage>> =
+        changeCounter
+            .map { loadConversationMessages(conversationId) }
+            .onStart { emit(loadConversationMessages(conversationId)) }
+            .flowOn(Dispatchers.IO)
+
+    fun observeConversationSummaries(): Flow<List<ConversationSummary>> =
+        changeCounter
+            .map { loadConversationSummaries() }
+            .onStart { emit(loadConversationSummaries()) }
+            .flowOn(Dispatchers.IO)
+
+    fun observeProfileStats(): Flow<ProfileStats> =
+        changeCounter
+            .map { loadProfileStats() }
+            .onStart { emit(loadProfileStats()) }
+            .flowOn(Dispatchers.IO)
+
+    suspend fun insertMessage(conversationId: Long, message: ChatMessage) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.insertWithOnConflict(
+            TABLE_MESSAGES,
+            null,
+            ContentValues().apply {
+                put(COL_MESSAGE_ID, message.id)
+                put(COL_MESSAGE_CONVERSATION_ID, conversationId)
+                put(COL_MESSAGE_ROLE, message.role.name)
+                put(COL_MESSAGE_CONTENT, message.content)
+                put(COL_MESSAGE_TIMESTAMP, message.timestamp)
+                put(COL_MESSAGE_IS_STREAMING, if (message.isStreaming) 1 else 0)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+        touchConversation(db, conversationId, message)
+        notifyChange()
+    }
+
+    suspend fun updateMessageContent(messageId: String, content: String, isStreaming: Boolean) =
+        withContext(Dispatchers.IO) {
+            val db = dbHelper.writableDatabase
+            db.update(
+                TABLE_MESSAGES,
+                ContentValues().apply {
+                    put(COL_MESSAGE_CONTENT, content)
+                    put(COL_MESSAGE_IS_STREAMING, if (isStreaming) 1 else 0)
+                },
+                "$COL_MESSAGE_ID = ?",
+                arrayOf(messageId)
+            )
+            notifyChange()
+        }
+
+    suspend fun deleteAllHistory() = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete(TABLE_MESSAGES, null, null)
+            db.delete(TABLE_CONVERSATIONS, null, null)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        createConversation()
+        notifyChange()
+    }
+
+    suspend fun latestConversationIdOrCreate(): Long = withContext(Dispatchers.IO) {
+        latestConversationId() ?: createConversation()
+    }
+
+    suspend fun createNewConversation(): Long = withContext(Dispatchers.IO) {
+        val id = createConversation("New Chat")
+        notifyChange()
+        id
+    }
+
+    suspend fun deleteConversation(conversationId: Long): Long = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete(
+                TABLE_MESSAGES,
+                "$COL_MESSAGE_CONVERSATION_ID = ?",
+                arrayOf(conversationId.toString())
+            )
+            db.delete(
+                TABLE_CONVERSATIONS,
+                "$COL_CONVERSATION_ID = ?",
+                arrayOf(conversationId.toString())
+            )
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        val nextConversationId = latestConversationId() ?: createConversation("New Chat")
+        notifyChange()
+        nextConversationId
+    }
+
+    private fun loadConversationMessages(conversationId: Long): List<ChatMessage> {
+        val db = dbHelper.readableDatabase
+        return db.query(
+            TABLE_MESSAGES,
+            arrayOf(
+                COL_MESSAGE_ID,
+                COL_MESSAGE_CONTENT,
+                COL_MESSAGE_ROLE,
+                COL_MESSAGE_TIMESTAMP,
+                COL_MESSAGE_IS_STREAMING
+            ),
+            "$COL_MESSAGE_CONVERSATION_ID = ?",
+            arrayOf(conversationId.toString()),
+            null,
+            null,
+            "$COL_MESSAGE_TIMESTAMP ASC"
+        ).use { cursor ->
+            val messages = mutableListOf<ChatMessage>()
+            while (cursor.moveToNext()) {
+                messages += ChatMessage(
+                    id = cursor.getString(0),
+                    content = cursor.getString(1),
+                    role = MessageRole.valueOf(cursor.getString(2)),
+                    timestamp = cursor.getLong(3),
+                    isStreaming = cursor.getInt(4) == 1
+                )
+            }
+            messages
+        }
+    }
+
+    private fun loadConversationSummaries(): List<ConversationSummary> {
+        val db = dbHelper.readableDatabase
+        val query = """
+            SELECT c.$COL_CONVERSATION_ID,
+                   COALESCE(c.$COL_CONVERSATION_TITLE, 'New Chat'),
+                   COALESCE(
+                       (SELECT m.$COL_MESSAGE_CONTENT FROM $TABLE_MESSAGES m
+                        WHERE m.$COL_MESSAGE_CONVERSATION_ID = c.$COL_CONVERSATION_ID
+                        ORDER BY m.$COL_MESSAGE_TIMESTAMP DESC LIMIT 1),
+                       ''
+                   ),
+                   c.$COL_CONVERSATION_UPDATED_AT,
+                   (SELECT COUNT(*) FROM $TABLE_MESSAGES m2
+                    WHERE m2.$COL_MESSAGE_CONVERSATION_ID = c.$COL_CONVERSATION_ID)
+            FROM $TABLE_CONVERSATIONS c
+            ORDER BY c.$COL_CONVERSATION_UPDATED_AT DESC
+        """.trimIndent()
+
+        return db.rawQuery(query, null).use { cursor ->
+            val items = mutableListOf<ConversationSummary>()
+            while (cursor.moveToNext()) {
+                items += ConversationSummary(
+                    id = cursor.getLong(0),
+                    title = cursor.getString(1),
+                    preview = cursor.getString(2),
+                    updatedAt = cursor.getLong(3),
+                    messageCount = cursor.getInt(4)
+                )
+            }
+            items
+        }
+    }
+
+    private fun loadProfileStats(): ProfileStats {
+        val db = dbHelper.readableDatabase
+        val conversations = singleIntQuery(db, "SELECT COUNT(*) FROM $TABLE_CONVERSATIONS")
+        val totalMessages = singleIntQuery(db, "SELECT COUNT(*) FROM $TABLE_MESSAGES")
+        val userMessages = singleIntQuery(
+            db,
+            "SELECT COUNT(*) FROM $TABLE_MESSAGES WHERE $COL_MESSAGE_ROLE = ?",
+            arrayOf(MessageRole.USER.name)
+        )
+        val aiMessages = singleIntQuery(
+            db,
+            "SELECT COUNT(*) FROM $TABLE_MESSAGES WHERE $COL_MESSAGE_ROLE = ?",
+            arrayOf(MessageRole.AI.name)
+        )
+        return ProfileStats(
+            conversationCount = conversations,
+            messageCount = totalMessages,
+            userMessages = userMessages,
+            aiMessages = aiMessages
+        )
+    }
+
+    private fun singleIntQuery(db: SQLiteDatabase, query: String, args: Array<String>? = null): Int {
+        return db.rawQuery(query, args).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
+    }
+
+    private fun latestConversationId(): Long? {
+        val db = dbHelper.readableDatabase
+        return db.query(
+            TABLE_CONVERSATIONS,
+            arrayOf(COL_CONVERSATION_ID),
+            null,
+            null,
+            null,
+            null,
+            "$COL_CONVERSATION_UPDATED_AT DESC",
+            "1"
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0) else null
+        }
+    }
+
+    private fun conversationExists(conversationId: Long): Boolean {
+        val db = dbHelper.readableDatabase
+        return db.query(
+            TABLE_CONVERSATIONS,
+            arrayOf(COL_CONVERSATION_ID),
+            "$COL_CONVERSATION_ID = ?",
+            arrayOf(conversationId.toString()),
+            null,
+            null,
+            null,
+            "1"
+        ).use { it.moveToFirst() }
+    }
+
+    private fun createConversation(title: String? = null): Long {
+        val now = System.currentTimeMillis()
+        val db = dbHelper.writableDatabase
+        return db.insert(
+            TABLE_CONVERSATIONS,
+            null,
+            ContentValues().apply {
+                put(COL_CONVERSATION_TITLE, title)
+                put(COL_CONVERSATION_CREATED_AT, now)
+                put(COL_CONVERSATION_UPDATED_AT, now)
+            }
+        )
+    }
+
+    private fun touchConversation(db: SQLiteDatabase, conversationId: Long, message: ChatMessage) {
+        val values = ContentValues().apply {
+            put(COL_CONVERSATION_UPDATED_AT, message.timestamp)
+            if (message.role == MessageRole.USER) {
+                val title = message.content.trim().take(60)
+                if (title.isNotEmpty()) {
+                    put(COL_CONVERSATION_TITLE, title)
+                }
+            }
+        }
+        db.update(
+            TABLE_CONVERSATIONS,
+            values,
+            "$COL_CONVERSATION_ID = ?",
+            arrayOf(conversationId.toString())
+        )
+    }
+
+    private fun notifyChange() {
+        changeCounter.value += 1
+    }
+
+    private class ChatDatabaseHelper(context: Context) :
+        SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
+        override fun onCreate(db: SQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE $TABLE_CONVERSATIONS (
+                    $COL_CONVERSATION_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                    $COL_CONVERSATION_TITLE TEXT,
+                    $COL_CONVERSATION_CREATED_AT INTEGER NOT NULL,
+                    $COL_CONVERSATION_UPDATED_AT INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE $TABLE_MESSAGES (
+                    $COL_MESSAGE_ID TEXT PRIMARY KEY,
+                    $COL_MESSAGE_CONVERSATION_ID INTEGER NOT NULL,
+                    $COL_MESSAGE_ROLE TEXT NOT NULL,
+                    $COL_MESSAGE_CONTENT TEXT NOT NULL,
+                    $COL_MESSAGE_TIMESTAMP INTEGER NOT NULL,
+                    $COL_MESSAGE_IS_STREAMING INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY($COL_MESSAGE_CONVERSATION_ID) REFERENCES $TABLE_CONVERSATIONS($COL_CONVERSATION_ID) ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX idx_messages_conversation_time ON $TABLE_MESSAGES($COL_MESSAGE_CONVERSATION_ID, $COL_MESSAGE_TIMESTAMP)"
+            )
+
+            val now = System.currentTimeMillis()
+            db.insert(
+                TABLE_CONVERSATIONS,
+                null,
+                ContentValues().apply {
+                    put(COL_CONVERSATION_TITLE, "New Chat")
+                    put(COL_CONVERSATION_CREATED_AT, now)
+                    put(COL_CONVERSATION_UPDATED_AT, now)
+                }
+            )
+        }
+
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            db.execSQL("DROP TABLE IF EXISTS $TABLE_MESSAGES")
+            db.execSQL("DROP TABLE IF EXISTS $TABLE_CONVERSATIONS")
+            onCreate(db)
+        }
+    }
+
+    private companion object {
+        const val DATABASE_NAME = "chat_local.db"
+        const val DATABASE_VERSION = 1
+
+        const val TABLE_CONVERSATIONS = "conversations"
+        const val TABLE_MESSAGES = "messages"
+
+        const val COL_CONVERSATION_ID = "id"
+        const val COL_CONVERSATION_TITLE = "title"
+        const val COL_CONVERSATION_CREATED_AT = "created_at"
+        const val COL_CONVERSATION_UPDATED_AT = "updated_at"
+
+        const val COL_MESSAGE_ID = "id"
+        const val COL_MESSAGE_CONVERSATION_ID = "conversation_id"
+        const val COL_MESSAGE_ROLE = "role"
+        const val COL_MESSAGE_CONTENT = "content"
+        const val COL_MESSAGE_TIMESTAMP = "timestamp"
+        const val COL_MESSAGE_IS_STREAMING = "is_streaming"
+    }
+}
