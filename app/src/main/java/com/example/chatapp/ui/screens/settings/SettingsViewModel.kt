@@ -3,6 +3,7 @@ package com.example.chatapp.ui.screens.settings
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import com.example.chatapp.data.local.ChatLocalStore
+import com.example.chatapp.data.local.LocalMediaStore
 import androidx.lifecycle.ViewModel
 import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.model.ModelOption
@@ -22,6 +23,7 @@ import kotlinx.coroutines.launch
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val chatLocalStore: ChatLocalStore,
+    private val localMediaStore: LocalMediaStore,
     private val appPreferences: AppPreferences,
     private val chatRepository: ChatRepository
 ) : ViewModel() {
@@ -33,7 +35,7 @@ class SettingsViewModel @Inject constructor(
     val selectedModel: StateFlow<String> = appPreferences.selectedModel.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = ModelCatalog.GEMMA
+        initialValue = ModelCatalog.QWEN_SMALL
     )
     val temperature: StateFlow<Float> = appPreferences.temperature.stateIn(
         scope = viewModelScope,
@@ -94,6 +96,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.clearConversation()
             chatLocalStore.deleteAllHistory()
+            localMediaStore.deleteAllChatMedia()
         }
     }
 
@@ -115,7 +118,7 @@ class SettingsViewModel @Inject constructor(
             val fallbackModelId = ModelCatalog.all.firstOrNull {
                 val file = File(modelsDir, it.fileName)
                 file.exists() && file.length() > 0L
-            }?.id ?: ModelCatalog.GEMMA
+            }?.id ?: ModelCatalog.QWEN_SMALL
             appPreferences.updateSelectedModel(fallbackModelId)
         }
     }

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Chatapp</string>
+    <string name="app_name">InnoAI</string>
     <string name="download_title">Download AI Model</string>
     <string name="download_subtitle">Required for on-device AI (1.6 GB)</string>
     <string name="download_button">Download Model</string>

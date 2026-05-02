@@ -63,7 +63,7 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(if (compact) 16.dp else 28.dp))
 
             Text(
-                text = "AI Edge Gallery",
+                text = "InnoAI",
                 style = if (compact) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,
                 color = Color.White,
                 fontWeight = FontWeight.ExtraBold,
@@ -73,7 +73,7 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(if (compact) 8.dp else 10.dp))
 
             Text(
-                text = "Run powerful AI models directly on your device - private, fast, and offline.",
+                text = "Run private AI chat directly on your device - text, images, and audio notes stay local.",
                 style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
                 color = Color(0xFF888888),
                 textAlign = TextAlign.Center
@@ -86,10 +86,10 @@ fun OnboardingScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 FeatureBullet("100% on-device processing", compact = compact)
-                FeatureBullet("Mediapipe LLM Inference powered", compact = compact)
+                FeatureBullet("LiteRT-LM powered local models", compact = compact)
                 FeatureBullet("No cloud connection needed", compact = compact)
                 FeatureBullet("Private and secure by default", compact = compact)
-                FeatureBullet("Runs on any modern GPU/NPU", compact = compact)
+                FeatureBullet("Works with CPU or supported GPU backend", compact = compact)
             }
 
             Spacer(modifier = Modifier.height(if (compact) 22.dp else 30.dp))
@@ -115,7 +115,7 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Powered by Google LiteRT",
+                text = "Offline-first with Google LiteRT",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF555555)
             )

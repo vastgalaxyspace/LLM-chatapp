@@ -31,11 +31,13 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,6 +84,7 @@ fun DownloadScreen(
     val activeModelId by viewModel.activeModelId.collectAsStateWithLifecycle()
     val lastTouchedModelId by viewModel.lastTouchedModelId.collectAsStateWithLifecycle()
     val selectedModelId by viewModel.selectedModelId.collectAsStateWithLifecycle()
+    val huggingFaceToken by viewModel.huggingFaceToken.collectAsStateWithLifecycle()
     val downloadedModelIds by viewModel.downloadedModelIds.collectAsStateWithLifecycle()
     val openSelectedModel by viewModel.openSelectedModel.collectAsStateWithLifecycle()
     var selectedUseCase by remember { mutableStateOf("All") }
@@ -109,6 +113,7 @@ fun DownloadScreen(
     val recommendedModelId = remember(selectedUseCase, availableRamGb, availableStorageGb) {
         recommendModel(
             models = useCaseFilteredModels,
+            selectedUseCase = selectedUseCase,
             availableRamGb = availableRamGb,
             availableStorageGb = availableStorageGb
         )?.id
@@ -246,7 +251,9 @@ fun DownloadScreen(
                     isRecommended = model.id == recommendedModelId,
                     deviceFit = evaluateDeviceFit(model, availableRamGb, availableStorageGb),
                     compact = screenWidthDp < 360,
+                    huggingFaceToken = huggingFaceToken,
                     onUseModel = { viewModel.useModel(model.id) },
+                    onTokenChange = viewModel::updateHuggingFaceToken,
                     onRetry = viewModel::retryActiveModel,
                     onDeleteModel = { viewModel.deleteModel(model.id) }
                 )
@@ -299,7 +306,9 @@ private fun ModelCard(
     isRecommended: Boolean,
     deviceFit: DeviceFit,
     compact: Boolean,
+    huggingFaceToken: String,
     onUseModel: () -> Unit,
+    onTokenChange: (String) -> Unit,
     onRetry: () -> Unit,
     onDeleteModel: () -> Unit
 ) {
@@ -311,7 +320,9 @@ private fun ModelCard(
     )
 
     var showDownloadDialog by remember { mutableStateOf(false) }
+    var showHuggingFaceDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
 
     if (showDownloadDialog) {
         val context = androidx.compose.ui.platform.LocalContext.current
@@ -325,8 +336,13 @@ private fun ModelCard(
             titleContentColor = Color.White,
             textContentColor = Color(0xFFCCCCCC),
             title = { Text("Model Specifications") },
-            text = { 
-                Text("Your device has ${String.format(java.util.Locale.US, "%.1f", availRamMb / 1024f)} GB of free RAM. This model requires approximately ${String.format(java.util.Locale.US, "%.1f", model.sizeMb / 1000f)} GB.\n\nLarge models may run slowly or crash if your device does not have enough memory. Do you want to proceed with downloading?")
+            text = {
+                val accessText = if (model.requiresHuggingFaceAccess) {
+                    "\n\nThis model also needs Hugging Face license access. Accept the license on Hugging Face and add a read token in Settings before downloading."
+                } else {
+                    ""
+                }
+                Text("Your device has ${String.format(java.util.Locale.US, "%.1f", availRamMb / 1024f)} GB of free RAM. This model requires approximately ${String.format(java.util.Locale.US, "%.1f", model.sizeMb / 1000f)} GB.\n\nLarge models may run slowly or crash if your device does not have enough memory.$accessText\n\nDo you want to proceed with downloading?")
             },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = { 
@@ -340,6 +356,25 @@ private fun ModelCard(
                 androidx.compose.material3.TextButton(onClick = { showDownloadDialog = false }) {
                     Text("Cancel", color = Color(0xFF888888))
                 }
+            }
+        )
+    }
+
+    if (showHuggingFaceDialog) {
+        HuggingFaceAccessDialog(
+            model = model,
+            token = huggingFaceToken,
+            onTokenChange = onTokenChange,
+            onOpenLicense = {
+                model.licenseUrl?.let(uriHandler::openUri)
+            },
+            onOpenTokenPage = {
+                uriHandler.openUri("https://huggingface.co/settings/tokens")
+            },
+            onDismiss = { showHuggingFaceDialog = false },
+            onDownload = {
+                showHuggingFaceDialog = false
+                onUseModel()
             }
         )
     }
@@ -453,6 +488,20 @@ private fun ModelCard(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelMedium,
                             color = PrimaryGreen
+                        )
+                    }
+                }
+                if (model.requiresHuggingFaceAccess) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF3A321F)
+                    ) {
+                        Text(
+                            text = "HF token",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color(0xFFFFD27A)
                         )
                     }
                 }
@@ -575,7 +624,9 @@ private fun ModelCard(
             // Action button
             Button(
                 onClick = {
-                    if (downloadState is DownloadState.Error) onRetry()
+                    if (downloadState is DownloadState.Error && model.requiresHuggingFaceAccess) showHuggingFaceDialog = true
+                    else if (downloadState is DownloadState.Error) onRetry()
+                    else if (!isDownloaded && model.requiresHuggingFaceAccess) showHuggingFaceDialog = true
                     else if (!isDownloaded) showDownloadDialog = true
                     else onUseModel()
                 },
@@ -628,6 +679,67 @@ private fun ModelCard(
             }
         }
     }
+}
+
+@Composable
+private fun HuggingFaceAccessDialog(
+    model: ModelOption,
+    token: String,
+    onTokenChange: (String) -> Unit,
+    onOpenLicense: () -> Unit,
+    onOpenTokenPage: () -> Unit,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1E1E1E),
+        titleContentColor = Color.White,
+        textContentColor = Color(0xFFCCCCCC),
+        title = { Text("Hugging Face access") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "${model.displayName} is protected by its creator. You only need to do this once.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "1. Open the license page and accept access.\n2. Create a free Read token.\n3. Paste the token here.\n4. Tap Download.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFBDBDBD)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onOpenLicense, enabled = model.licenseUrl != null) {
+                        Text("Open license", color = PrimaryGreen)
+                    }
+                    TextButton(onClick = onOpenTokenPage) {
+                        Text("Create token", color = PrimaryGreen)
+                    }
+                }
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = onTokenChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("Paste hf_ token") },
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDownload,
+                enabled = token.trim().startsWith("hf_")
+            ) {
+                Text("Download", color = PrimaryGreen)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = Color(0xFF888888))
+            }
+        }
+    )
 }
 
 private fun formatMb(value: Float): String = String.format(Locale.US, "%.0f", value)
@@ -720,21 +832,30 @@ private fun evaluateDeviceFit(
 
 private fun recommendModel(
     models: List<ModelOption>,
+    selectedUseCase: String,
     availableRamGb: Float,
     availableStorageGb: Float
 ): ModelOption? {
     if (models.isEmpty()) return null
 
-    val viable = models.filter { model ->
+    val preferredUseCase = when (selectedUseCase) {
+        "All" -> "Text"
+        else -> selectedUseCase
+    }
+    val useCasePool = models.filter { preferredUseCase in it.useCases }.ifEmpty { models }
+    val accessPool = useCasePool.filterNot { it.requiresHuggingFaceAccess }.ifEmpty { useCasePool }
+
+    val viable = accessPool.filter { model ->
         val sizeGb = model.sizeMb / 1000f
         sizeGb <= availableStorageGb * 0.75f
     }
-    val pool = if (viable.isNotEmpty()) viable else models
+    val pool = if (viable.isNotEmpty()) viable else accessPool
 
     return pool.minByOrNull { model ->
         val sizeGb = model.sizeMb / 1000f
         val sizePenalty = max(0f, sizeGb - (availableRamGb * 0.8f))
         val versatilityBonus = when {
+            selectedUseCase == "All" && "Text" in model.useCases -> -0.8f
             "Image" in model.useCases -> -0.6f
             "Code" in model.useCases -> -0.3f
             else -> 0f

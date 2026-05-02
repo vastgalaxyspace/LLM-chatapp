@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.example.chatapp.data.model.ChatMessage
 import com.example.chatapp.data.model.MessageRole
+import com.example.chatapp.data.model.MessageType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -76,6 +77,10 @@ class ChatLocalStore @Inject constructor(
                 put(COL_MESSAGE_CONTENT, message.content)
                 put(COL_MESSAGE_TIMESTAMP, message.timestamp)
                 put(COL_MESSAGE_IS_STREAMING, if (message.isStreaming) 1 else 0)
+                put(COL_MESSAGE_TYPE, message.type.name)
+                put(COL_MESSAGE_MEDIA_URI, message.mediaUri)
+                put(COL_MESSAGE_MIME_TYPE, message.mimeType)
+                put(COL_MESSAGE_DURATION_MILLIS, message.durationMillis)
             },
             SQLiteDatabase.CONFLICT_REPLACE
         )
@@ -155,7 +160,11 @@ class ChatLocalStore @Inject constructor(
                 COL_MESSAGE_CONTENT,
                 COL_MESSAGE_ROLE,
                 COL_MESSAGE_TIMESTAMP,
-                COL_MESSAGE_IS_STREAMING
+                COL_MESSAGE_IS_STREAMING,
+                COL_MESSAGE_TYPE,
+                COL_MESSAGE_MEDIA_URI,
+                COL_MESSAGE_MIME_TYPE,
+                COL_MESSAGE_DURATION_MILLIS
             ),
             "$COL_MESSAGE_CONVERSATION_ID = ?",
             arrayOf(conversationId.toString()),
@@ -170,7 +179,11 @@ class ChatLocalStore @Inject constructor(
                     content = cursor.getString(1),
                     role = MessageRole.valueOf(cursor.getString(2)),
                     timestamp = cursor.getLong(3),
-                    isStreaming = cursor.getInt(4) == 1
+                    isStreaming = cursor.getInt(4) == 1,
+                    type = runCatching { MessageType.valueOf(cursor.getString(5)) }.getOrDefault(MessageType.TEXT),
+                    mediaUri = cursor.getString(6),
+                    mimeType = cursor.getString(7),
+                    durationMillis = if (cursor.isNull(8)) null else cursor.getLong(8)
                 )
             }
             messages
@@ -183,7 +196,13 @@ class ChatLocalStore @Inject constructor(
             SELECT c.$COL_CONVERSATION_ID,
                    COALESCE(c.$COL_CONVERSATION_TITLE, 'New Chat'),
                    COALESCE(
-                       (SELECT m.$COL_MESSAGE_CONTENT FROM $TABLE_MESSAGES m
+                       (SELECT
+                            CASE
+                                WHEN m.$COL_MESSAGE_TYPE = '${MessageType.IMAGE.name}' THEN '[Image] ' || m.$COL_MESSAGE_CONTENT
+                                WHEN m.$COL_MESSAGE_TYPE = '${MessageType.AUDIO.name}' THEN '[Audio] ' || m.$COL_MESSAGE_CONTENT
+                                ELSE m.$COL_MESSAGE_CONTENT
+                            END
+                        FROM $TABLE_MESSAGES m
                         WHERE m.$COL_MESSAGE_CONVERSATION_ID = c.$COL_CONVERSATION_ID
                         ORDER BY m.$COL_MESSAGE_TIMESTAMP DESC LIMIT 1),
                        ''
@@ -326,6 +345,10 @@ class ChatLocalStore @Inject constructor(
                     $COL_MESSAGE_CONTENT TEXT NOT NULL,
                     $COL_MESSAGE_TIMESTAMP INTEGER NOT NULL,
                     $COL_MESSAGE_IS_STREAMING INTEGER NOT NULL DEFAULT 0,
+                    $COL_MESSAGE_TYPE TEXT NOT NULL DEFAULT '${MessageType.TEXT.name}',
+                    $COL_MESSAGE_MEDIA_URI TEXT,
+                    $COL_MESSAGE_MIME_TYPE TEXT,
+                    $COL_MESSAGE_DURATION_MILLIS INTEGER,
                     FOREIGN KEY($COL_MESSAGE_CONVERSATION_ID) REFERENCES $TABLE_CONVERSATIONS($COL_CONVERSATION_ID) ON DELETE CASCADE
                 )
                 """.trimIndent()
@@ -347,15 +370,18 @@ class ChatLocalStore @Inject constructor(
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-            db.execSQL("DROP TABLE IF EXISTS $TABLE_MESSAGES")
-            db.execSQL("DROP TABLE IF EXISTS $TABLE_CONVERSATIONS")
-            onCreate(db)
+            if (oldVersion < 2) {
+                db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MESSAGE_TYPE TEXT NOT NULL DEFAULT '${MessageType.TEXT.name}'")
+                db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MESSAGE_MEDIA_URI TEXT")
+                db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MESSAGE_MIME_TYPE TEXT")
+                db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MESSAGE_DURATION_MILLIS INTEGER")
+            }
         }
     }
 
     private companion object {
         const val DATABASE_NAME = "chat_local.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
 
         const val TABLE_CONVERSATIONS = "conversations"
         const val TABLE_MESSAGES = "messages"
@@ -371,5 +397,9 @@ class ChatLocalStore @Inject constructor(
         const val COL_MESSAGE_CONTENT = "content"
         const val COL_MESSAGE_TIMESTAMP = "timestamp"
         const val COL_MESSAGE_IS_STREAMING = "is_streaming"
+        const val COL_MESSAGE_TYPE = "message_type"
+        const val COL_MESSAGE_MEDIA_URI = "media_uri"
+        const val COL_MESSAGE_MIME_TYPE = "mime_type"
+        const val COL_MESSAGE_DURATION_MILLIS = "duration_millis"
     }
 }

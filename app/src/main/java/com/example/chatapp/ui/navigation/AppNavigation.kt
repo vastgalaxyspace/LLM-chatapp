@@ -44,6 +44,17 @@ private fun NavHostController.navigateTopLevel(route: String) {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+    val appNavigationViewModel: AppNavigationViewModel = hiltViewModel()
+    val hasCompletedOnboarding by appNavigationViewModel.hasCompletedOnboarding.collectAsStateWithLifecycle()
+
+    LaunchedEffect(hasCompletedOnboarding) {
+        if (hasCompletedOnboarding && navController.currentDestination?.route == Routes.Onboarding) {
+            navController.navigate(Routes.Download) {
+                popUpTo(Routes.Onboarding) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -52,6 +63,7 @@ fun AppNavigation() {
         composable(Routes.Onboarding) {
             OnboardingScreen(
                 onGetStarted = {
+                    appNavigationViewModel.completeOnboarding()
                     navController.navigate(Routes.Download) {
                         popUpTo(Routes.Onboarding) { inclusive = true }
                         launchSingleTop = true

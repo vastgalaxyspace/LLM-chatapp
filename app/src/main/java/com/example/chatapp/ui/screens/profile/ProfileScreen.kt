@@ -94,7 +94,7 @@ fun ProfileScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "K",
+                    text = "I",
                     style = MaterialTheme.typography.displayMedium,
                     color = PrimaryGreen,
                     fontWeight = FontWeight.Bold
@@ -104,7 +104,7 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "Kishan Morle",
+                text = "InnoAI User",
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
                 fontWeight = FontWeight.Bold

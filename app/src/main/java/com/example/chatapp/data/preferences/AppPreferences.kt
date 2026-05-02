@@ -26,14 +26,16 @@ class AppPreferences @Inject constructor(
         val Temperature = floatPreferencesKey("temperature")
         val MaxTokens = intPreferencesKey("max_tokens")
         val HuggingFaceToken = stringPreferencesKey("hugging_face_token")
+        val HasCompletedOnboarding = androidx.datastore.preferences.core.booleanPreferencesKey("has_completed_onboarding")
     }
 
     val selectedBackend: Flow<String> = context.dataStore.data.map { it[Keys.SelectedBackend] ?: "GPU" }
-    val selectedModel: Flow<String> = context.dataStore.data.map { it[Keys.SelectedModel] ?: ModelCatalog.GEMMA }
+    val selectedModel: Flow<String> = context.dataStore.data.map { it[Keys.SelectedModel] ?: ModelCatalog.QWEN_SMALL }
     val temperature: Flow<Float> = context.dataStore.data.map { it[Keys.Temperature] ?: 0.8f }
     val maxTokens: Flow<Int> = context.dataStore.data.map { it[Keys.MaxTokens] ?: 512 }
+    val hasCompletedOnboarding: Flow<Boolean> = context.dataStore.data.map { it[Keys.HasCompletedOnboarding] ?: false }
     val isModelDownloaded: Flow<Boolean> = context.dataStore.data.map {
-        val selectedModelId = it[Keys.SelectedModel] ?: ModelCatalog.GEMMA
+        val selectedModelId = it[Keys.SelectedModel] ?: ModelCatalog.QWEN_SMALL
         val selectedModelFile = File(context.filesDir, "models/${ModelCatalog.fromId(selectedModelId).fileName}")
         selectedModelFile.exists() && selectedModelFile.length() > 0L
     }
@@ -58,5 +60,9 @@ class AppPreferences @Inject constructor(
 
     suspend fun updateHuggingFaceToken(value: String) {
         context.dataStore.edit { it[Keys.HuggingFaceToken] = value.trim() }
+    }
+
+    suspend fun markOnboardingComplete() {
+        context.dataStore.edit { it[Keys.HasCompletedOnboarding] = true }
     }
 }

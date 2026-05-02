@@ -7,5 +7,9 @@ data class ChatMessage(
     val content: String,
     val role: MessageRole,
     val timestamp: Long = System.currentTimeMillis(),
-    val isStreaming: Boolean = false
+    val isStreaming: Boolean = false,
+    val type: MessageType = MessageType.TEXT,
+    val mediaUri: String? = null,
+    val mimeType: String? = null,
+    val durationMillis: Long? = null
 )

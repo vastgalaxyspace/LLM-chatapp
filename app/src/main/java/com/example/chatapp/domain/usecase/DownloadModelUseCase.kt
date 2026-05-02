@@ -1,6 +1,7 @@
 package com.example.chatapp.domain.usecase
 
 import android.content.Context
+import com.example.chatapp.data.model.ModelOption
 import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.preferences.AppPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -62,8 +63,8 @@ class DownloadModelUseCase @Inject constructor(
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val message = when (response.code) {
-                        401 -> "Download blocked. Please sign in with a valid Hugging Face token, then try again."
-                        403 -> "Access denied for this model. Check your Hugging Face account permissions and retry."
+                        401 -> selectedModel.accessErrorMessage()
+                        403 -> selectedModel.accessErrorMessage()
                         404 -> "Model file is currently unavailable on the server. Please try again later."
                         429 -> "Too many download attempts right now. Wait a bit, then retry."
                         in 500..599 -> "Model server is having a problem right now. Please retry in a few minutes."
@@ -149,4 +150,11 @@ class DownloadModelUseCase @Inject constructor(
                 "Something went wrong while downloading. Please try again."
         }
     }
+
+    private fun ModelOption.accessErrorMessage(): String =
+        if (requiresHuggingFaceAccess) {
+            "$displayName requires Hugging Face access. Accept the model license on Hugging Face, add your token in Settings, then retry."
+        } else {
+            "Access denied for $displayName. Check your Hugging Face token or try again later."
+        }
 }

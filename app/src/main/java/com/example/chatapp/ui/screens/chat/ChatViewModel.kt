@@ -4,8 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.chatapp.data.local.ChatLocalStore
 import com.example.chatapp.data.local.ConversationSummary
+import com.example.chatapp.data.local.LocalMediaStore
+import com.example.chatapp.data.local.StoredMedia
 import com.example.chatapp.data.model.ChatMessage
 import com.example.chatapp.data.model.MessageRole
+import com.example.chatapp.data.model.MessageType
+import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.repository.ChatRepository
 import com.example.chatapp.domain.usecase.SendMessageUseCase
@@ -18,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -26,6 +31,7 @@ class ChatViewModel @Inject constructor(
     private val sendMessageUseCase: SendMessageUseCase,
     private val chatRepository: ChatRepository,
     private val chatLocalStore: ChatLocalStore,
+    private val localMediaStore: LocalMediaStore,
     appPreferences: AppPreferences
 ) : ViewModel() {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -69,6 +75,18 @@ class ChatViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = 512
     )
+    private val selectedModelId = appPreferences.selectedModel.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ModelCatalog.QWEN_SMALL
+    )
+    val selectedModelName: StateFlow<String> = selectedModelId
+        .map { modelId -> ModelCatalog.fromId(modelId).displayName }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = ModelCatalog.fromId(ModelCatalog.QWEN_SMALL).displayName
+        )
 
     private var generationJob: Job? = null
     private var conversationObserverJob: Job? = null
@@ -150,6 +168,15 @@ class ChatViewModel @Inject constructor(
     fun sendMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _isGenerating.value || _isLoading.value) return
+        val selectedModel = ModelCatalog.fromId(selectedModelId.value)
+        if ("Text" !in selectedModel.useCases) {
+            _errorMessage.value = "${selectedModel.displayName} is not a normal chat model. Open Models and choose a Text model like Qwen 3 or Gemma 3."
+            return
+        }
+        if (looksLikeImageQuestion(trimmed) && _messages.value.any { it.type == MessageType.IMAGE }) {
+            _errorMessage.value = "Image understanding is not connected yet. The image is saved locally, but the model cannot read it in this chat path yet. Choose a Text model for normal questions."
+            return
+        }
 
         generationJob?.cancel()
         generationJob = viewModelScope.launch {
@@ -192,6 +219,64 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun attachImage(uri: android.net.Uri, caption: String? = null) {
+        viewModelScope.launch {
+            runCatching {
+                localMediaStore.copyImage(uri)
+            }.onSuccess { media ->
+                insertLocalMediaMessage(
+                    type = MessageType.IMAGE,
+                    media = media,
+                    content = caption?.trim().takeUnless { it.isNullOrBlank() } ?: "Image attached"
+                )
+            }.onFailure {
+                _errorMessage.value = "Couldn't attach that image. Please try another one."
+            }
+        }
+    }
+
+    fun createAudioTarget(): java.io.File = localMediaStore.createAudioTarget()
+
+    fun attachRecordedAudio(file: java.io.File, durationMillis: Long) {
+        viewModelScope.launch {
+            if (!file.exists() || file.length() == 0L) {
+                _errorMessage.value = "No audio was recorded. Please try again."
+                return@launch
+            }
+
+            insertLocalMediaMessage(
+                type = MessageType.AUDIO,
+                media = localMediaStore.storedAudio(file),
+                content = "Audio note saved locally",
+                durationMillis = durationMillis
+            )
+        }
+    }
+
+    private suspend fun insertLocalMediaMessage(
+        type: MessageType,
+        media: StoredMedia,
+        content: String,
+        durationMillis: Long? = null
+    ) {
+        val conversationId = chatLocalStore.ensureConversation(_activeConversationId.value)
+        if (_activeConversationId.value != conversationId) {
+            observeConversation(conversationId)
+        }
+
+        chatLocalStore.insertMessage(
+            conversationId = conversationId,
+            message = ChatMessage(
+                content = content,
+                role = MessageRole.USER,
+                type = type,
+                mediaUri = media.path,
+                mimeType = media.mimeType,
+                durationMillis = durationMillis
+            )
+        )
+    }
+
     fun stopGeneration() {
         generationJob?.cancel()
         _isGenerating.value = false
@@ -214,6 +299,7 @@ class ChatViewModel @Inject constructor(
             _errorMessage.value = null
             chatRepository.clearConversation()
             chatLocalStore.deleteAllHistory()
+            localMediaStore.deleteAllChatMedia()
             val newConversation = chatLocalStore.latestConversationIdOrCreate()
             observeConversation(newConversation)
         }
@@ -249,6 +335,13 @@ class ChatViewModel @Inject constructor(
                 "This device cannot run the selected model on GPU. Switch to CPU in Settings and retry."
             else ->
                 "Couldn't complete your request. Please try again."
+        }
+    }
+
+    private fun looksLikeImageQuestion(text: String): Boolean {
+        val normalized = text.lowercase()
+        return listOf("image", "photo", "picture", "pic", "explain this", "what is this", "describe").any {
+            normalized.contains(it)
         }
     }
 }

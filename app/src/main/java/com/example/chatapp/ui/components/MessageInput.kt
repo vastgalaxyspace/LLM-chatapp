@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.KeyboardVoice
+import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,9 +49,12 @@ import com.example.chatapp.ui.theme.PrimaryGreen
 fun MessageInput(
     modifier: Modifier = Modifier,
     isGenerating: Boolean,
+    isRecording: Boolean = false,
     enabled: Boolean,
     onSend: (String) -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onAttachImage: () -> Unit = {},
+    onToggleRecording: () -> Unit = {}
 ) {
     var text by remember { mutableStateOf(TextFieldValue("")) }
 
@@ -97,7 +102,8 @@ fun MessageInput(
                 modifier = Modifier
                     .size(leadingSize)
                     .background(Color(0x1FFFFFFF), CircleShape)
-                    .border(1.dp, Color(0x55FFFFFF), CircleShape),
+                    .border(1.dp, Color(0x55FFFFFF), CircleShape)
+                    .clickable(enabled = enabled && !isGenerating, onClick = onAttachImage),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -145,7 +151,7 @@ fun MessageInput(
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (text.text.isEmpty()) {
                                     Text(
-                                        text = "Ask ChatGPT",
+                                        text = "Ask InnoAI",
                                         color = Color(0xCFE0E0E0)
                                     )
                                 }
@@ -156,13 +162,14 @@ fun MessageInput(
 
                     if (!hasText && !isGenerating) {
                         IconButton(
-                            onClick = { },
+                            onClick = onToggleRecording,
+                            enabled = enabled,
                             modifier = Modifier.size(if (compact) 34.dp else 38.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.KeyboardVoice,
-                                contentDescription = "Voice",
-                                tint = Color(0xD9E2E2E2),
+                                imageVector = if (isRecording) Icons.Rounded.MicOff else Icons.Rounded.KeyboardVoice,
+                                contentDescription = if (isRecording) "Stop recording" else "Record audio",
+                                tint = if (isRecording) ErrorRed else Color(0xD9E2E2E2),
                                 modifier = Modifier.size(if (compact) 20.dp else 22.dp)
                             )
                         }
@@ -172,6 +179,8 @@ fun MessageInput(
                         onClick = {
                             if (isGenerating) {
                                 onStop()
+                            } else if (isRecording) {
+                                onToggleRecording()
                             } else {
                                 val value = text.text.trim()
                                 if (value.isNotEmpty() && enabled) {
@@ -186,7 +195,7 @@ fun MessageInput(
                     ) {
                         Icon(
                             imageVector = when {
-                                isGenerating -> Icons.Rounded.Stop
+                                isGenerating || isRecording -> Icons.Rounded.Stop
                                 hasText -> Icons.Rounded.ArrowUpward
                                 else -> Icons.Rounded.GraphicEq
                             },

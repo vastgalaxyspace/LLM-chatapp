@@ -45,7 +45,12 @@ class DownloadViewModel @Inject constructor(
     val selectedModelId: StateFlow<String> = appPreferences.selectedModel.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = ModelCatalog.GEMMA
+        initialValue = ModelCatalog.QWEN_SMALL
+    )
+    val huggingFaceToken: StateFlow<String> = appPreferences.huggingFaceToken.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ""
     )
 
     private var downloadJob: Job? = null
@@ -62,6 +67,7 @@ class DownloadViewModel @Inject constructor(
             appPreferences.updateSelectedModel(modelId)
             _lastTouchedModelId.value = modelId
             if (isDownloaded(modelId)) {
+                chatRepository.closeEngine()
                 _openSelectedModel.value = true
             } else {
                 startDownload(modelId)
@@ -82,6 +88,7 @@ class DownloadViewModel @Inject constructor(
                 if (state is DownloadState.Complete) {
                     _downloadedModelIds.value = scanDownloadedModels()
                     appPreferences.updateSelectedModel(modelId)
+                    chatRepository.closeEngine()
                     _activeModelId.value = null
                     _openSelectedModel.value = true
                 }
@@ -126,7 +133,7 @@ class DownloadViewModel @Inject constructor(
 
             if (selectedModelId.value == modelId) {
                 val fallbackModelId = ModelCatalog.all.firstOrNull { it.id in _downloadedModelIds.value }?.id
-                    ?: ModelCatalog.GEMMA
+                    ?: ModelCatalog.QWEN_SMALL
                 appPreferences.updateSelectedModel(fallbackModelId)
             }
         }
@@ -136,6 +143,12 @@ class DownloadViewModel @Inject constructor(
         val modelId = activeModelId.value ?: lastTouchedModelId.value ?: selectedModelId.value
         viewModelScope.launch {
             startDownload(modelId)
+        }
+    }
+
+    fun updateHuggingFaceToken(value: String) {
+        viewModelScope.launch {
+            appPreferences.updateHuggingFaceToken(value)
         }
     }
 

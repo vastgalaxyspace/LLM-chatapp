@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -65,6 +66,7 @@ fun SettingsScreen(
     val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
     val temperature by viewModel.temperature.collectAsStateWithLifecycle()
     val maxTokens by viewModel.maxTokens.collectAsStateWithLifecycle()
+    val huggingFaceToken by viewModel.huggingFaceToken.collectAsStateWithLifecycle()
     var showClearDialog by remember { mutableStateOf(false) }
     var showDeleteModelDialog by remember { mutableStateOf(false) }
     val currentModel = ModelCatalog.fromId(selectedModel)
@@ -113,6 +115,11 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(14.dp))
                 ModelSelector(selectedModel, viewModel::updateModel)
                 Spacer(modifier = Modifier.height(10.dp))
+                HuggingFaceTokenField(
+                    value = huggingFaceToken,
+                    onValueChange = viewModel::updateHuggingFaceToken
+                )
+                Spacer(modifier = Modifier.height(10.dp))
                 DestructiveRow("Delete Downloaded Model") { showDeleteModelDialog = true }
             }
 
@@ -157,7 +164,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "PRIVATE  •  ON-DEVICE  •  SECURE",
+                text = "PRIVATE  |  ON-DEVICE  |  SECURE",
                 modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.labelMedium,
                 color = Color(0xFF444444),
@@ -193,6 +200,35 @@ fun SettingsScreen(
                 showDeleteModelDialog = false
                 onNavigateBack()
             }
+        )
+    }
+}
+
+@Composable
+private fun HuggingFaceTokenField(
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Hugging Face Token",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF888888)
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = {
+                Text("Required for gated Gemma models")
+            },
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+        )
+        Text(
+            text = "For Gemma 3 downloads, accept the model license on Hugging Face first, then paste a read token here.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF777777)
         )
     }
 }

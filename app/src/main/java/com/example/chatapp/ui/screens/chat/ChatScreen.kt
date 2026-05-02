@@ -1,5 +1,11 @@
 package com.example.chatapp.ui.screens.chat
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.MediaRecorder
+import android.os.SystemClock
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -21,6 +27,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -57,6 +65,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -71,6 +80,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -87,6 +97,8 @@ import com.example.chatapp.ui.theme.DarkBackground
 import com.example.chatapp.ui.theme.PrimaryGreen
 import kotlinx.coroutines.launch
 import androidx.compose.material3.rememberDrawerState
+import androidx.core.content.ContextCompat
+import java.io.File
 
 @Composable
 fun ChatScreen(
@@ -103,13 +115,81 @@ fun ChatScreen(
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val activeConversationId by viewModel.activeConversationId.collectAsStateWithLifecycle()
     val conversationHistory by viewModel.conversationHistory.collectAsStateWithLifecycle()
+    val selectedModelName by viewModel.selectedModelName.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     var hasProcessedInitialPrompt by remember { mutableStateOf(false) }
+    var isRecording by remember { mutableStateOf(false) }
+    var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var recordingTarget by remember { mutableStateOf<File?>(null) }
+    var recordingStartedAt by remember { mutableStateOf(0L) }
+
+    fun stopRecording(save: Boolean) {
+        val activeRecorder = recorder ?: return
+        runCatching {
+            activeRecorder.stop()
+        }
+        activeRecorder.release()
+        recorder = null
+        isRecording = false
+
+        val target = recordingTarget
+        recordingTarget = null
+        if (save && target != null) {
+            val durationMillis = SystemClock.elapsedRealtime() - recordingStartedAt
+            viewModel.attachRecordedAudio(target, durationMillis)
+        } else {
+            target?.delete()
+        }
+    }
+
+    fun startRecording() {
+        val target = viewModel.createAudioTarget()
+        val mediaRecorder = MediaRecorder().apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setAudioEncodingBitRate(128_000)
+            setAudioSamplingRate(44_100)
+            setOutputFile(target.absolutePath)
+            prepare()
+            start()
+        }
+        recordingTarget = target
+        recordingStartedAt = SystemClock.elapsedRealtime()
+        recorder = mediaRecorder
+        isRecording = true
+    }
+
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { viewModel.attachImage(it) }
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            runCatching { startRecording() }
+                .onFailure {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Couldn't start recording. Please try again.")
+                    }
+                }
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("Microphone permission is needed to record audio.") }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            stopRecording(save = false)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.initEngine()
@@ -197,6 +277,7 @@ fun ChatScreen(
                 topBar = {
                     ChatTopBar(
                         isReady = !isLoading && viewModel.isEngineReady(),
+                        modelName = selectedModelName,
                         onOpenHistory = {
                             scope.launch {
                                 if (drawerState.isOpen) drawerState.close() else drawerState.open()
@@ -210,6 +291,8 @@ fun ChatScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .imePadding()
                             .background(Color.Transparent)
                     ) {
                         Box(
@@ -224,13 +307,34 @@ fun ChatScreen(
                             MessageInput(
                                 modifier = Modifier.widthIn(max = if (isLargeLayout) 920.dp else 640.dp),
                                 isGenerating = isGenerating,
+                                isRecording = isRecording,
                                 enabled = !isLoading,
                                 onSend = { text ->
                                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     keyboardController?.hide()
                                     viewModel.sendMessage(text)
                                 },
-                                onStop = viewModel::stopGeneration
+                                onStop = viewModel::stopGeneration,
+                                onAttachImage = {
+                                    imagePicker.launch("image/*")
+                                },
+                                onToggleRecording = {
+                                    if (isRecording) {
+                                        stopRecording(save = true)
+                                    } else {
+                                        when (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)) {
+                                            PackageManager.PERMISSION_GRANTED -> {
+                                                runCatching { startRecording() }
+                                                    .onFailure {
+                                                        scope.launch {
+                                                            snackbarHostState.showSnackbar("Couldn't start recording. Please try again.")
+                                                        }
+                                                    }
+                                            }
+                                            else -> audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        }
+                                    }
+                                }
                             )
                         }
                     }
@@ -286,6 +390,7 @@ fun ChatScreen(
 @Composable
 private fun ChatTopBar(
     isReady: Boolean,
+    modelName: String,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenModels: (() -> Unit)?
@@ -353,9 +458,11 @@ private fun ChatTopBar(
                                 .background(statusDot, CircleShape)
                         )
                         Text(
-                            text = if (isReady) "Model ready" else "Model unavailable",
+                            text = if (isReady) "$modelName ready" else "Model unavailable",
                             style = MaterialTheme.typography.labelMedium,
-                            color = if (isReady) Color(0xFF999999) else Color(0xFFEF5350).copy(alpha = 0.85f)
+                            color = if (isReady) Color(0xFF999999) else Color(0xFFEF5350).copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -562,11 +669,51 @@ private fun EmptyChatState(
             // Use BrandLockup for a premium branded header
             BrandLockup(
                 title = "InnoAI",
-                subtitle = "Your private AI assistant",
+                subtitle = "Private offline assistant",
                 large = !compact
             )
 
             Spacer(modifier = Modifier.height(if (compact) 12.dp else 20.dp))
+
+            Column(
+                modifier = Modifier
+                    .widthIn(max = contentMaxWidth)
+                    .padding(horizontal = horizontalPadding),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                EmptyHintRow("Text", "Ask questions and keep chats stored locally.")
+                EmptyHintRow("Images", "Attach pictures from your device for local chat context.")
+                EmptyHintRow("Audio", "Record voice notes saved privately on this device.")
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyHintRow(
+    title: String,
+    description: String
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFF1E1E1E)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF888888)
+            )
         }
     }
 }
