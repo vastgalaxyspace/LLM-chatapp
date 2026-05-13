@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.example.chatapp.data.model.ChatMessage
 import com.example.chatapp.data.model.MessageRole
 import com.example.chatapp.data.model.MessageType
+import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.ui.theme.PrimaryGreen
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -51,6 +52,13 @@ import java.util.Locale
 @Composable
 fun ChatBubble(message: ChatMessage) {
     val isUser = message.role == MessageRole.USER
+    val displayContent = remember(message.content, message.role) {
+        if (message.role == MessageRole.AI) {
+            AssistantResponseCleaner.clean(message.content)
+        } else {
+            message.content
+        }
+    }
     val transition = rememberInfiniteTransition(label = "streaming_cursor")
     val cursorAlpha by transition.animateFloat(
         initialValue = 0.15f,
@@ -135,7 +143,15 @@ fun ChatBubble(message: ChatMessage) {
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
-                                text = message.content,
+                                text = if (displayContent.isNotBlank() && AssistantResponseCleaner.hasVisibleAnswer(displayContent)) {
+                                    displayContent
+                                } else {
+                                    if (!message.isStreaming && message.role == MessageRole.AI) {
+                                        "I couldn't produce a final answer. Please try again."
+                                    } else {
+                                        ""
+                                    }
+                                },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = Color.White
                             )

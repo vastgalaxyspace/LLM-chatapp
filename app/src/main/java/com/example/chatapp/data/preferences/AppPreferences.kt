@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.chatapp.BuildConfig
 import com.example.chatapp.data.model.ModelCatalog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -32,7 +33,7 @@ class AppPreferences @Inject constructor(
     val selectedBackend: Flow<String> = context.dataStore.data.map { it[Keys.SelectedBackend] ?: "GPU" }
     val selectedModel: Flow<String> = context.dataStore.data.map { it[Keys.SelectedModel] ?: ModelCatalog.QWEN_SMALL }
     val temperature: Flow<Float> = context.dataStore.data.map { it[Keys.Temperature] ?: 0.8f }
-    val maxTokens: Flow<Int> = context.dataStore.data.map { it[Keys.MaxTokens] ?: 512 }
+    val maxTokens: Flow<Int> = context.dataStore.data.map { (it[Keys.MaxTokens] ?: 1536).coerceIn(512, 2048) }
     val hasCompletedOnboarding: Flow<Boolean> = context.dataStore.data.map { it[Keys.HasCompletedOnboarding] ?: false }
     val isModelDownloaded: Flow<Boolean> = context.dataStore.data.map {
         val selectedModelId = it[Keys.SelectedModel] ?: ModelCatalog.QWEN_SMALL
@@ -56,7 +57,9 @@ class AppPreferences @Inject constructor(
         context.dataStore.edit { it[Keys.MaxTokens] = value }
     }
 
-    val huggingFaceToken: Flow<String> = context.dataStore.data.map { it[Keys.HuggingFaceToken] ?: "" }
+    val huggingFaceToken: Flow<String> = context.dataStore.data.map {
+        it[Keys.HuggingFaceToken]?.takeIf { token -> token.isNotBlank() } ?: BuildConfig.HUGGING_FACE_TOKEN
+    }
 
     suspend fun updateHuggingFaceToken(value: String) {
         context.dataStore.edit { it[Keys.HuggingFaceToken] = value.trim() }

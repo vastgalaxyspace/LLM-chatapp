@@ -89,6 +89,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.chatapp.data.local.ConversationSummary
 import com.example.chatapp.data.model.MessageRole
+import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.ui.components.BrandLockup
 import com.example.chatapp.ui.components.ChatBubble
 import com.example.chatapp.ui.components.MessageInput
@@ -367,11 +368,14 @@ fun ChatScreen(
                                 verticalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 14.dp)
                             ) {
                                 items(messages, key = { it.id }) { message ->
+                                    val isWaitingForVisibleAiText = message.role == MessageRole.AI &&
+                                        message.isStreaming &&
+                                        AssistantResponseCleaner.clean(message.content).isBlank()
                                     AnimatedVisibility(
                                         visible = true,
                                         enter = slideInVertically(initialOffsetY = { it / 3 }) + fadeIn()
                                     ) {
-                                        if (message.role == MessageRole.AI && message.content.isEmpty() && message.isStreaming) {
+                                        if (isWaitingForVisibleAiText) {
                                             TypingIndicator()
                                         } else {
                                             ChatBubble(message)

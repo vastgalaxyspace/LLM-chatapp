@@ -45,7 +45,7 @@ class SettingsViewModel @Inject constructor(
     val maxTokens: StateFlow<Int> = appPreferences.maxTokens.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = 512
+        initialValue = 1536
     )
     val huggingFaceToken: StateFlow<String> = appPreferences.huggingFaceToken.stateIn(
         scope = viewModelScope,

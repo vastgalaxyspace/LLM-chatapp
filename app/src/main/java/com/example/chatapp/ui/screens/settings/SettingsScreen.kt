@@ -144,11 +144,11 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                SliderBlock("Max Tokens", maxTokens.toString(), "128", "2048") {
+                SliderBlock("Max Tokens", maxTokens.toString(), "512", "2048") {
                     Slider(
                         value = maxTokens.toFloat(),
                         onValueChange = { viewModel.updateMaxTokens(it.toInt()) },
-                        valueRange = 128f..2048f,
+                        valueRange = 512f..2048f,
                         colors = sliderColors()
                     )
                 }

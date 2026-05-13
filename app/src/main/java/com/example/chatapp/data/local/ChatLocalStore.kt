@@ -103,6 +103,19 @@ class ChatLocalStore @Inject constructor(
             notifyChange()
         }
 
+    suspend fun finishAbandonedStreamingMessages() = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.update(
+            TABLE_MESSAGES,
+            ContentValues().apply {
+                put(COL_MESSAGE_IS_STREAMING, 0)
+            },
+            "$COL_MESSAGE_IS_STREAMING = ?",
+            arrayOf("1")
+        )
+        notifyChange()
+    }
+
     suspend fun deleteAllHistory() = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         db.beginTransaction()

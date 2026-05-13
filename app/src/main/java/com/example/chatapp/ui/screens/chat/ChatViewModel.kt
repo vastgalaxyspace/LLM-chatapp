@@ -12,6 +12,7 @@ import com.example.chatapp.data.model.MessageType
 import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.repository.ChatRepository
+import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.domain.usecase.SendMessageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -94,6 +96,7 @@ class ChatViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            chatLocalStore.finishAbandonedStreamingMessages()
             val conversationId = chatLocalStore.latestConversationIdOrCreate()
             observeConversation(conversationId)
         }
@@ -103,6 +106,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val resolvedId = chatLocalStore.ensureConversation(conversationId)
             if (_activeConversationId.value == resolvedId) return@launch
+            chatLocalStore.finishAbandonedStreamingMessages()
             chatRepository.clearConversation()
             observeConversation(resolvedId)
         }
@@ -124,6 +128,7 @@ class ChatViewModel @Inject constructor(
                 generationJob?.cancel()
                 _isGenerating.value = false
                 chatRepository.clearConversation()
+                chatLocalStore.finishAbandonedStreamingMessages()
                 observeConversation(nextConversationId)
             }
         }
@@ -195,27 +200,41 @@ class ChatViewModel @Inject constructor(
             _isGenerating.value = true
             _errorMessage.value = null
 
-            var aiContent = ""
+            var rawAiContent = ""
+            var timedOut = false
             try {
-                sendMessageUseCase(trimmed, temperature.value, maxTokens.value).collect { token ->
-                    aiContent += token
-                    chatLocalStore.updateMessageContent(
-                        messageId = aiMessage.id,
-                        content = aiContent,
-                        isStreaming = true
-                    )
-                }
+                timedOut = withTimeoutOrNull(CHAT_RESPONSE_TIMEOUT_MS) {
+                    sendMessageUseCase(trimmed, temperature.value, maxTokens.value).collect { token ->
+                        rawAiContent += token
+                        val cleanedContent = AssistantResponseCleaner.clean(rawAiContent)
+                        chatLocalStore.updateMessageContent(
+                            messageId = aiMessage.id,
+                            content = cleanedContent.takeIf { AssistantResponseCleaner.hasVisibleAnswer(it) }.orEmpty(),
+                            isStreaming = true
+                        )
+                    }
+                } == null
             } catch (throwable: Throwable) {
                 _errorMessage.value = toUserError(throwable.message)
             } finally {
                 _isGenerating.value = false
+                val finalContent = AssistantResponseCleaner.clean(rawAiContent)
                 chatLocalStore.updateMessageContent(
                     messageId = aiMessage.id,
-                    content = aiContent,
+                    content = finalChatContent(finalContent, rawAiContent, timedOut),
                     isStreaming = false
                 )
                 lastStreamingMessageId = null
             }
+        }
+    }
+
+    private fun finalChatContent(finalContent: String, rawContent: String, timedOut: Boolean): String {
+        if (AssistantResponseCleaner.hasVisibleAnswer(finalContent)) return finalContent
+        return when {
+            timedOut -> "The model took too long to answer. Try a shorter question or choose a faster chat model."
+            rawContent.isNotBlank() -> "I couldn't produce a final answer. Please try again."
+            else -> ""
         }
     }
 
@@ -283,9 +302,10 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val messageId = lastStreamingMessageId ?: return@launch
             val activeAiMessage = _messages.value.lastOrNull { it.id == messageId } ?: return@launch
+            val cleanedContent = AssistantResponseCleaner.clean(activeAiMessage.content)
             chatLocalStore.updateMessageContent(
                 messageId = messageId,
-                content = activeAiMessage.content,
+                content = cleanedContent.ifBlank { "Generation stopped before a final answer was produced." },
                 isStreaming = false
             )
             lastStreamingMessageId = null
@@ -343,5 +363,9 @@ class ChatViewModel @Inject constructor(
         return listOf("image", "photo", "picture", "pic", "explain this", "what is this", "describe").any {
             normalized.contains(it)
         }
+    }
+
+    private companion object {
+        const val CHAT_RESPONSE_TIMEOUT_MS = 120_000L
     }
 }

@@ -71,7 +71,7 @@ class ChatRepositoryImpl @Inject constructor(
         }
 
         var previousText = ""
-        activeConversation.sendMessageAsync(Message.of(message)).collect { chunk ->
+        activeConversation.sendMessageAsync(Message.of(buildUserPrompt(message))).collect { chunk ->
             val fullText = chunk.toString()
 
             val delta = if (fullText.startsWith(previousText)) {
@@ -86,6 +86,19 @@ class ChatRepositoryImpl @Inject constructor(
             }
         }
     }.flowOn(Dispatchers.IO)
+
+    private fun buildUserPrompt(message: String): String {
+        return """
+            Reply with the final answer only.
+            Start immediately with the answer.
+            Give a complete, helpful answer with enough detail for the question.
+            Use simple plain text only.
+            Do not use Markdown, XML, hidden reasoning, chain-of-thought, or <think> tags.
+
+            Question: $message
+            /no_think
+        """.trimIndent()
+    }
 
     override suspend fun clearConversation() {
         withContext(Dispatchers.IO) {
@@ -109,7 +122,7 @@ class ChatRepositoryImpl @Inject constructor(
 
     private suspend fun initializeEngineInternal(backendName: String) {
         closeInternal()
-        val configuredMaxTokens = appPreferences.maxTokens.first().coerceIn(128, 2048)
+        val configuredMaxTokens = appPreferences.maxTokens.first().coerceIn(512, 2048)
         val selectedBackend = if (backendName.equals("CPU", ignoreCase = true)) {
             Backend.CPU()
         } else {
