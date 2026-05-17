@@ -13,7 +13,8 @@ data class ModelOption(
     val description: String = "",
     val useCases: Set<String> = setOf("Text"),
     val requiresHuggingFaceAccess: Boolean = false,
-    val licenseUrl: String? = null
+    val licenseUrl: String? = null,
+    val sha256: String? = null
 )
 
 object ModelCatalog {

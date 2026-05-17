@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class ConversationSummary(
     val id: Long,
@@ -31,6 +33,14 @@ data class ProfileStats(
     val messageCount: Int,
     val userMessages: Int,
     val aiMessages: Int
+)
+
+data class ConversationSearchResult(
+    val conversationId: Long,
+    val messageId: String,
+    val role: MessageRole,
+    val snippet: String,
+    val timestamp: Long
 )
 
 @Singleton
@@ -84,6 +94,7 @@ class ChatLocalStore @Inject constructor(
             },
             SQLiteDatabase.CONFLICT_REPLACE
         )
+        upsertMessageSearchIndex(db, conversationId, message)
         touchConversation(db, conversationId, message)
         notifyChange()
     }
@@ -99,6 +110,10 @@ class ChatLocalStore @Inject constructor(
                 },
                 "$COL_MESSAGE_ID = ?",
                 arrayOf(messageId)
+            )
+            db.execSQL(
+                "UPDATE $TABLE_MESSAGES_FTS SET $COL_MESSAGE_CONTENT = ? WHERE $COL_MESSAGE_ID = ?",
+                arrayOf(content, messageId)
             )
             notifyChange()
         }
@@ -121,6 +136,7 @@ class ChatLocalStore @Inject constructor(
         db.beginTransaction()
         try {
             db.delete(TABLE_MESSAGES, null, null)
+            db.delete(TABLE_MESSAGES_FTS, null, null)
             db.delete(TABLE_CONVERSATIONS, null, null)
             db.setTransactionSuccessful()
         } finally {
@@ -146,6 +162,11 @@ class ChatLocalStore @Inject constructor(
         try {
             db.delete(
                 TABLE_MESSAGES,
+                "$COL_MESSAGE_CONVERSATION_ID = ?",
+                arrayOf(conversationId.toString())
+            )
+            db.delete(
+                TABLE_MESSAGES_FTS,
                 "$COL_MESSAGE_CONVERSATION_ID = ?",
                 arrayOf(conversationId.toString())
             )
@@ -201,6 +222,86 @@ class ChatLocalStore @Inject constructor(
             }
             messages
         }
+    }
+
+    suspend fun searchMessages(query: String): List<ConversationSearchResult> = withContext(Dispatchers.IO) {
+        val normalized = query.trim()
+        if (normalized.length < 2) return@withContext emptyList()
+        val db = dbHelper.readableDatabase
+        val ftsQuery = normalized
+            .split(Regex("""\s+"""))
+            .map { it.replace(Regex("""[^\p{L}\p{N}_-]"""), "") }
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { "$it*" }
+        if (ftsQuery.isBlank()) return@withContext emptyList()
+
+        db.rawQuery(
+            """
+            SELECT $COL_MESSAGE_CONVERSATION_ID,
+                   $COL_MESSAGE_ID,
+                   $COL_MESSAGE_ROLE,
+                   snippet($TABLE_MESSAGES_FTS, '', '', '...', -1, 12),
+                   $COL_MESSAGE_TIMESTAMP
+            FROM $TABLE_MESSAGES_FTS
+            WHERE $TABLE_MESSAGES_FTS MATCH ?
+            ORDER BY $COL_MESSAGE_TIMESTAMP DESC
+            LIMIT 50
+            """.trimIndent(),
+            arrayOf(ftsQuery)
+        ).use { cursor ->
+            val results = mutableListOf<ConversationSearchResult>()
+            while (cursor.moveToNext()) {
+                results += ConversationSearchResult(
+                    conversationId = cursor.getLong(0),
+                    messageId = cursor.getString(1),
+                    role = MessageRole.valueOf(cursor.getString(2)),
+                    snippet = cursor.getString(3),
+                    timestamp = cursor.getLong(4)
+                )
+            }
+            results
+        }
+    }
+
+    suspend fun exportAllConversationsAsText(): String = withContext(Dispatchers.IO) {
+        val summaries = loadConversationSummaries().sortedBy { it.updatedAt }
+        buildString {
+            summaries.forEach { summary ->
+                appendLine("# ${summary.title}")
+                loadConversationMessages(summary.id).forEach { message ->
+                    appendLine("${message.role.name.lowercase()}: ${message.content}")
+                }
+                appendLine()
+            }
+        }.trim()
+    }
+
+    suspend fun exportAllConversationsAsJson(): String = withContext(Dispatchers.IO) {
+        val conversations = JSONArray()
+        loadConversationSummaries().forEach { summary ->
+            val messages = JSONArray()
+            loadConversationMessages(summary.id).forEach { message ->
+                messages.put(
+                    JSONObject()
+                        .put("id", message.id)
+                        .put("role", message.role.name)
+                        .put("content", message.content)
+                        .put("timestamp", message.timestamp)
+                        .put("type", message.type.name)
+                        .put("mediaUri", message.mediaUri)
+                        .put("mimeType", message.mimeType)
+                        .put("durationMillis", message.durationMillis)
+                )
+            }
+            conversations.put(
+                JSONObject()
+                    .put("id", summary.id)
+                    .put("title", summary.title)
+                    .put("updatedAt", summary.updatedAt)
+                    .put("messages", messages)
+            )
+        }
+        JSONObject().put("conversations", conversations).toString(2)
     }
 
     private fun loadConversationSummaries(): List<ConversationSummary> {
@@ -369,6 +470,7 @@ class ChatLocalStore @Inject constructor(
             db.execSQL(
                 "CREATE INDEX idx_messages_conversation_time ON $TABLE_MESSAGES($COL_MESSAGE_CONVERSATION_ID, $COL_MESSAGE_TIMESTAMP)"
             )
+            createFtsTable(db)
 
             val now = System.currentTimeMillis()
             db.insert(
@@ -389,15 +491,76 @@ class ChatLocalStore @Inject constructor(
                 db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MESSAGE_MIME_TYPE TEXT")
                 db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $COL_MESSAGE_DURATION_MILLIS INTEGER")
             }
+            if (oldVersion < 3) {
+                createFtsTable(db)
+                db.execSQL(
+                    """
+                    INSERT INTO $TABLE_MESSAGES_FTS(
+                        $COL_MESSAGE_ID,
+                        $COL_MESSAGE_CONVERSATION_ID,
+                        $COL_MESSAGE_ROLE,
+                        $COL_MESSAGE_CONTENT,
+                        $COL_MESSAGE_TIMESTAMP
+                    )
+                    SELECT $COL_MESSAGE_ID,
+                           $COL_MESSAGE_CONVERSATION_ID,
+                           $COL_MESSAGE_ROLE,
+                           $COL_MESSAGE_CONTENT,
+                           $COL_MESSAGE_TIMESTAMP
+                    FROM $TABLE_MESSAGES
+                    """.trimIndent()
+                )
+            }
         }
+
+        override fun onOpen(db: SQLiteDatabase) {
+            super.onOpen(db)
+            if (!db.isReadOnly) {
+                createFtsTable(db)
+            }
+        }
+
+        private fun createFtsTable(db: SQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS $TABLE_MESSAGES_FTS USING fts4(
+                    $COL_MESSAGE_ID,
+                    $COL_MESSAGE_CONVERSATION_ID,
+                    $COL_MESSAGE_ROLE,
+                    $COL_MESSAGE_CONTENT,
+                    $COL_MESSAGE_TIMESTAMP,
+                    notindexed=$COL_MESSAGE_ID,
+                    notindexed=$COL_MESSAGE_CONVERSATION_ID,
+                    notindexed=$COL_MESSAGE_ROLE,
+                    notindexed=$COL_MESSAGE_TIMESTAMP
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    private fun upsertMessageSearchIndex(db: SQLiteDatabase, conversationId: Long, message: ChatMessage) {
+        db.delete(TABLE_MESSAGES_FTS, "$COL_MESSAGE_ID = ?", arrayOf(message.id))
+        db.insert(
+            TABLE_MESSAGES_FTS,
+            null,
+            ContentValues().apply {
+                put(COL_MESSAGE_ID, message.id)
+                put(COL_MESSAGE_CONVERSATION_ID, conversationId)
+                put(COL_MESSAGE_ROLE, message.role.name)
+                put(COL_MESSAGE_CONTENT, message.content)
+                put(COL_MESSAGE_TIMESTAMP, message.timestamp)
+            }
+        )
     }
 
     private companion object {
         const val DATABASE_NAME = "chat_local.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 3
 
         const val TABLE_CONVERSATIONS = "conversations"
         const val TABLE_MESSAGES = "messages"
+        const val TABLE_MESSAGES_FTS = "messages_fts"
 
         const val COL_CONVERSATION_ID = "id"
         const val COL_CONVERSATION_TITLE = "title"

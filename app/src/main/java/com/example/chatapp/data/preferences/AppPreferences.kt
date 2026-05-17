@@ -19,7 +19,8 @@ import kotlinx.coroutines.flow.map
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "chatapp_preferences")
 
 class AppPreferences @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val secureTokenStore: SecureTokenStore = SecureTokenStore(context)
 ) {
     private object Keys {
         val SelectedBackend = stringPreferencesKey("selected_backend")
@@ -57,12 +58,24 @@ class AppPreferences @Inject constructor(
         context.dataStore.edit { it[Keys.MaxTokens] = value }
     }
 
-    val huggingFaceToken: Flow<String> = context.dataStore.data.map {
-        it[Keys.HuggingFaceToken]?.takeIf { token -> token.isNotBlank() } ?: BuildConfig.HUGGING_FACE_TOKEN
+    val huggingFaceToken: Flow<String> = context.dataStore.data.map { preferences ->
+        val legacyToken = preferences[Keys.HuggingFaceToken]?.takeIf { token -> token.isNotBlank() }
+        legacyToken ?: secureTokenStore.readHuggingFaceToken()?.takeIf { token -> token.isNotBlank() } ?: BuildConfig.HUGGING_FACE_TOKEN
     }
 
     suspend fun updateHuggingFaceToken(value: String) {
-        context.dataStore.edit { it[Keys.HuggingFaceToken] = value.trim() }
+        secureTokenStore.writeHuggingFaceToken(value)
+        context.dataStore.edit { it.remove(Keys.HuggingFaceToken) }
+    }
+
+    suspend fun migratePlaintextHuggingFaceTokenIfNeeded() {
+        context.dataStore.edit { preferences ->
+            val legacyToken = preferences[Keys.HuggingFaceToken]?.takeIf { it.isNotBlank() }
+            if (legacyToken != null && secureTokenStore.readHuggingFaceToken().isNullOrBlank()) {
+                secureTokenStore.writeHuggingFaceToken(legacyToken)
+            }
+            preferences.remove(Keys.HuggingFaceToken)
+        }
     }
 
     suspend fun markOnboardingComplete() {

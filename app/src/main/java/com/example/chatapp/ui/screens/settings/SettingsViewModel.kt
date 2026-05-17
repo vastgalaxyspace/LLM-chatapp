@@ -1,8 +1,10 @@
 package com.example.chatapp.ui.screens.settings
 
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.viewModelScope
 import com.example.chatapp.data.local.ChatLocalStore
+import com.example.chatapp.data.local.ConversationSearchResult
 import com.example.chatapp.data.local.LocalMediaStore
 import androidx.lifecycle.ViewModel
 import com.example.chatapp.data.model.ModelCatalog
@@ -13,8 +15,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -27,6 +31,12 @@ class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
     private val chatRepository: ChatRepository
 ) : ViewModel() {
+    init {
+        viewModelScope.launch {
+            appPreferences.migratePlaintextHuggingFaceTokenIfNeeded()
+        }
+    }
+
     val selectedBackend: StateFlow<String> = appPreferences.selectedBackend.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -52,6 +62,11 @@ class SettingsViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ""
     )
+    private val _searchResults = MutableStateFlow<List<ConversationSearchResult>>(emptyList())
+    val searchResults: StateFlow<List<ConversationSearchResult>> = _searchResults.asStateFlow()
+
+    private val _exportError = MutableStateFlow<String?>(null)
+    val exportError: StateFlow<String?> = _exportError.asStateFlow()
 
     fun updateBackend(backend: String) {
         viewModelScope.launch {
@@ -71,18 +86,12 @@ class SettingsViewModel @Inject constructor(
     fun updateTemperature(value: Float) {
         viewModelScope.launch {
             appPreferences.updateTemperature(value)
-            val currentBackend = selectedBackend.first()
-            chatRepository.closeEngine()
-            chatRepository.initializeEngine(currentBackend)
         }
     }
 
     fun updateMaxTokens(value: Int) {
         viewModelScope.launch {
             appPreferences.updateMaxTokens(value)
-            val currentBackend = selectedBackend.first()
-            chatRepository.closeEngine()
-            chatRepository.initializeEngine(currentBackend)
         }
     }
 
@@ -97,7 +106,46 @@ class SettingsViewModel @Inject constructor(
             chatRepository.clearConversation()
             chatLocalStore.deleteAllHistory()
             localMediaStore.deleteAllChatMedia()
+            _searchResults.value = emptyList()
         }
+    }
+
+    fun searchHistory(query: String) {
+        viewModelScope.launch {
+            _searchResults.value = chatLocalStore.searchMessages(query)
+        }
+    }
+
+    fun shareHistory(format: ExportFormat) {
+        viewModelScope.launch {
+            runCatching {
+                val (mimeType, title, body) = when (format) {
+                    ExportFormat.TEXT -> Triple(
+                        "text/plain",
+                        "InnoAI conversation history.txt",
+                        chatLocalStore.exportAllConversationsAsText()
+                    )
+                    ExportFormat.JSON -> Triple(
+                        "application/json",
+                        "InnoAI conversation history.json",
+                        chatLocalStore.exportAllConversationsAsJson()
+                    )
+                }
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = mimeType
+                    putExtra(Intent.EXTRA_SUBJECT, title)
+                    putExtra(Intent.EXTRA_TEXT, body)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(Intent.createChooser(sendIntent, "Export conversation history").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.onFailure {
+                _exportError.value = "Couldn't export conversation history. Please try again."
+            }
+        }
+    }
+
+    fun clearExportError() {
+        _exportError.value = null
     }
 
     fun currentModel(): ModelOption = ModelCatalog.fromId(selectedModel.value)
@@ -122,4 +170,9 @@ class SettingsViewModel @Inject constructor(
             appPreferences.updateSelectedModel(fallbackModelId)
         }
     }
+}
+
+enum class ExportFormat {
+    TEXT,
+    JSON
 }

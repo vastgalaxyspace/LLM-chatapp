@@ -18,14 +18,19 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image as ImageIcon
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,7 +43,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.example.chatapp.data.model.ChatMessage
 import com.example.chatapp.data.model.MessageRole
@@ -50,8 +64,12 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun ChatBubble(message: ChatMessage) {
+fun ChatBubble(
+    message: ChatMessage,
+    onRetry: (ChatMessage) -> Unit = {}
+) {
     val isUser = message.role == MessageRole.USER
+    val clipboardManager = LocalClipboardManager.current
     val displayContent = remember(message.content, message.role) {
         if (message.role == MessageRole.AI) {
             AssistantResponseCleaner.clean(message.content)
@@ -75,7 +93,15 @@ fun ChatBubble(message: ChatMessage) {
         val adaptiveMaxBubble = (maxWidth * 0.85f).coerceIn(220.dp, 600.dp)
 
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics {
+                    contentDescription = if (isUser) {
+                        "Your message: ${displayContent.ifBlank { message.type.name.lowercase() }}"
+                    } else {
+                        "Assistant message: ${displayContent.ifBlank { if (message.isStreaming) "generating" else message.type.name.lowercase() }}"
+                    }
+                },
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
         ) {
             if (!isUser) {
@@ -142,19 +168,19 @@ fun ChatBubble(message: ChatMessage) {
                             verticalAlignment = Alignment.Bottom,
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            Text(
-                                text = if (displayContent.isNotBlank() && AssistantResponseCleaner.hasVisibleAnswer(displayContent)) {
-                                    displayContent
-                                } else {
-                                    if (!message.isStreaming && message.role == MessageRole.AI) {
-                                        "I couldn't produce a final answer. Please try again."
+                            SelectionContainer(modifier = Modifier.weight(1f, fill = false)) {
+                                MarkdownMessageText(
+                                    text = if (displayContent.isNotBlank() && AssistantResponseCleaner.hasVisibleAnswer(displayContent)) {
+                                        displayContent
                                     } else {
-                                        ""
+                                        if (!message.isStreaming && message.role == MessageRole.AI) {
+                                            "I couldn't produce a final answer. Please try again."
+                                        } else {
+                                            ""
+                                        }
                                     }
-                                },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White
-                            )
+                                )
+                            }
                             if (message.isStreaming) {
                                 Text(
                                     text = "|",
@@ -168,14 +194,124 @@ fun ChatBubble(message: ChatMessage) {
                 }
             }
 
-            Text(
-                text = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(message.timestamp)),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF555555),
-                modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
-            )
+            Row(
+                modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(message.timestamp)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF555555)
+                )
+                if (!message.isStreaming && displayContent.isNotBlank()) {
+                    IconButton(
+                        onClick = { clipboardManager.setText(AnnotatedString(displayContent)) },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ContentCopy,
+                            contentDescription = "Copy message",
+                            tint = Color(0xFF777777),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+                if (!isUser && !message.isStreaming) {
+                    IconButton(
+                        onClick = { onRetry(message) },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = "Retry message",
+                            tint = Color(0xFF777777),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun MarkdownMessageText(text: String) {
+    val blocks = remember(text) { splitMarkdownBlocks(text) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        blocks.forEach { block ->
+            if (block.isCode) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.Black.copy(alpha = 0.28f)
+                ) {
+                    Text(
+                        text = block.text,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        color = Color(0xFFEAEAEA)
+                    )
+                }
+            } else {
+                Text(
+                    text = inlineMarkdown(block.text),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+private data class MarkdownBlock(
+    val text: String,
+    val isCode: Boolean
+)
+
+private fun splitMarkdownBlocks(text: String): List<MarkdownBlock> {
+    if (text.isBlank()) return emptyList()
+    val blocks = mutableListOf<MarkdownBlock>()
+    val fence = Regex("""```(?:[A-Za-z0-9_-]+)?\n?([\s\S]*?)```""")
+    var cursor = 0
+    fence.findAll(text).forEach { match ->
+        val before = text.substring(cursor, match.range.first).trim()
+        if (before.isNotBlank()) blocks += MarkdownBlock(before, isCode = false)
+        blocks += MarkdownBlock(match.groupValues[1].trim(), isCode = true)
+        cursor = match.range.last + 1
+    }
+    val after = text.substring(cursor).trim()
+    if (after.isNotBlank()) blocks += MarkdownBlock(after, isCode = false)
+    return blocks
+}
+
+private fun inlineMarkdown(text: String): AnnotatedString = buildAnnotatedString {
+    var index = 0
+    val token = Regex("""(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_)""")
+    token.findAll(text).forEach { match ->
+        append(text.substring(index, match.range.first))
+        val raw = match.value
+        when {
+            raw.startsWith("`") -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Color.White.copy(alpha = 0.12f))) {
+                append(raw.removeSurrounding("`"))
+            }
+            raw.startsWith("**") -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                append(raw.removeSurrounding("**"))
+            }
+            raw.startsWith("__") -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                append(raw.removeSurrounding("__"))
+            }
+            raw.startsWith("*") -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                append(raw.removeSurrounding("*"))
+            }
+            raw.startsWith("_") -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                append(raw.removeSurrounding("_"))
+            }
+            else -> append(raw)
+        }
+        index = match.range.last + 1
+    }
+    append(text.substring(index))
 }
 
 @Composable

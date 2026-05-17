@@ -49,9 +49,11 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,6 +69,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -113,6 +116,8 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
+    val generationTokensPerSecond by viewModel.generationTokensPerSecond.collectAsStateWithLifecycle()
+    val timeToFirstTokenMillis by viewModel.timeToFirstTokenMillis.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val activeConversationId by viewModel.activeConversationId.collectAsStateWithLifecycle()
     val conversationHistory by viewModel.conversationHistory.collectAsStateWithLifecycle()
@@ -129,6 +134,13 @@ fun ChatScreen(
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingTarget by remember { mutableStateOf<File?>(null) }
     var recordingStartedAt by remember { mutableStateOf(0L) }
+    val isAtBottom by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            messages.isEmpty() || lastVisible >= messages.lastIndex - 1
+        }
+    }
 
     fun stopRecording(save: Boolean) {
         val activeRecorder = recorder ?: return
@@ -208,7 +220,7 @@ fun ChatScreen(
     }
 
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
+        if (messages.isNotEmpty() && isAtBottom) {
             listState.animateScrollToItem(messages.lastIndex)
         }
     }
@@ -296,6 +308,34 @@ fun ChatScreen(
                             .imePadding()
                             .background(Color.Transparent)
                     ) {
+                        if (isGenerating && (generationTokensPerSecond != null || timeToFirstTokenMillis != null)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = horizontalPad, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = Color(0xFF1E1E1E)
+                                ) {
+                                    Text(
+                                        text = buildString {
+                                            generationTokensPerSecond?.let {
+                                                append("${String.format(java.util.Locale.US, "%.1f", it)} tok/s")
+                                            }
+                                            timeToFirstTokenMillis?.let {
+                                                if (isNotEmpty()) append(" • ")
+                                                append("TTFT ${it}ms")
+                                            }
+                                        },
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF9ADFA8)
+                                    )
+                                }
+                            }
+                        }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -378,10 +418,37 @@ fun ChatScreen(
                                         if (isWaitingForVisibleAiText) {
                                             TypingIndicator()
                                         } else {
-                                            ChatBubble(message)
+                                            ChatBubble(
+                                                message = message,
+                                                onRetry = { viewModel.retryMessage(it.id) }
+                                            )
                                         }
                                     }
                                 }
+                            }
+                        }
+                        AnimatedVisibility(
+                            visible = !isAtBottom,
+                            enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = horizontalPad, bottom = 18.dp)
+                        ) {
+                            FloatingActionButton(
+                                onClick = {
+                                    scope.launch {
+                                        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+                                    }
+                                },
+                                containerColor = PrimaryGreen,
+                                contentColor = Color.White,
+                                shape = CircleShape,
+                                modifier = Modifier.size(46.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.KeyboardArrowDown,
+                                    contentDescription = "Scroll to latest"
+                                )
                             }
                         }
                     }

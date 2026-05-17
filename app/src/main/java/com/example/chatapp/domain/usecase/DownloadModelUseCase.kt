@@ -6,9 +6,11 @@ import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.preferences.AppPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.net.ssl.SSLException
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +25,9 @@ sealed class DownloadState {
     data class Downloading(
         val progress: Float,
         val downloadedMB: Float,
-        val totalMB: Float
+        val totalMB: Float,
+        val speedMBps: Float = 0f,
+        val etaSeconds: Long? = null
     ) : DownloadState()
 
     data object Complete : DownloadState()
@@ -37,8 +41,8 @@ class DownloadModelUseCase @Inject constructor(
 ) {
     private val client = OkHttpClient()
 
-    operator fun invoke(): Flow<DownloadState> = flow {
-        val selectedModel = ModelCatalog.fromId(appPreferences.selectedModel.first())
+    operator fun invoke(modelId: String? = null): Flow<DownloadState> = flow {
+        val selectedModel = ModelCatalog.fromId(modelId ?: appPreferences.selectedModel.first())
         val modelsDirectory = File(context.filesDir, "models")
         if (!modelsDirectory.exists() && !modelsDirectory.mkdirs()) {
             emit(DownloadState.Error("Unable to create models directory."))
@@ -46,13 +50,20 @@ class DownloadModelUseCase @Inject constructor(
         }
 
         val destination = File(modelsDirectory, selectedModel.fileName)
-        if (destination.exists() && destination.length() > 0L) {
+        if (destination.exists() && destination.length() > 0L && destination.hasValidChecksum(selectedModel)) {
             emit(DownloadState.Complete)
             return@flow
+        }
+        if (destination.exists()) {
+            destination.delete()
         }
 
         val tempFile = File(modelsDirectory, "${selectedModel.fileName}.part")
         val requestBuilder = Request.Builder().url(selectedModel.downloadUrl)
+        val existingBytes = tempFile.length().takeIf { it > 0L } ?: 0L
+        if (existingBytes > 0L) {
+            requestBuilder.header("Range", "bytes=$existingBytes-")
+        }
         val hfToken = appPreferences.huggingFaceToken.first()
         if (hfToken.isNotBlank()) {
             requestBuilder.header("Authorization", "Bearer $hfToken")
@@ -61,7 +72,12 @@ class DownloadModelUseCase @Inject constructor(
 
         try {
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
+                val rangeAccepted = existingBytes > 0L && response.code == 206
+                if (existingBytes > 0L && response.code == 200) {
+                    tempFile.delete()
+                }
+
+                if (!response.isSuccessful || (existingBytes > 0L && !rangeAccepted && response.code != 200)) {
                     val message = when (response.code) {
                         401 -> selectedModel.accessErrorMessage()
                         403 -> selectedModel.accessErrorMessage()
@@ -80,12 +96,15 @@ class DownloadModelUseCase @Inject constructor(
                 }
 
                 val fallbackTotalBytes = (selectedModel.sizeMb * 1024 * 1024).toLong()
-                val totalBytes = body.contentLength().takeIf { it > 0L } ?: fallbackTotalBytes
+                val resumedBytes = if (rangeAccepted) existingBytes else 0L
+                val responseBytes = body.contentLength().takeIf { it > 0L }
+                val totalBytes = responseBytes?.plus(resumedBytes) ?: fallbackTotalBytes
 
                 body.byteStream().use { input ->
-                    tempFile.outputStream().use { output ->
+                    FileOutputStream(tempFile, rangeAccepted).use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var downloadedBytes = 0L
+                        var downloadedBytes = resumedBytes
+                        val startedAt = System.currentTimeMillis()
 
                         while (true) {
                             val read = input.read(buffer)
@@ -93,12 +112,22 @@ class DownloadModelUseCase @Inject constructor(
 
                             output.write(buffer, 0, read)
                             downloadedBytes += read
+                            val elapsedSeconds = ((System.currentTimeMillis() - startedAt) / 1000f).coerceAtLeast(0.25f)
+                            val currentSessionBytes = downloadedBytes - resumedBytes
+                            val speedBytesPerSecond = currentSessionBytes / elapsedSeconds
+                            val remainingBytes = (totalBytes - downloadedBytes).coerceAtLeast(0L)
 
                             emit(
                                 DownloadState.Downloading(
                                     progress = (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f),
                                     downloadedMB = downloadedBytes / 1024f / 1024f,
-                                    totalMB = totalBytes / 1024f / 1024f
+                                    totalMB = totalBytes / 1024f / 1024f,
+                                    speedMBps = speedBytesPerSecond / 1024f / 1024f,
+                                    etaSeconds = if (speedBytesPerSecond > 0f) {
+                                        (remainingBytes / speedBytesPerSecond).toLong()
+                                    } else {
+                                        null
+                                    }
                                 )
                             )
                         }
@@ -116,15 +145,36 @@ class DownloadModelUseCase @Inject constructor(
                     return@flow
                 }
 
+                if (!destination.hasValidChecksum(selectedModel)) {
+                    destination.delete()
+                    emit(DownloadState.Error("Download integrity check failed. Please retry on a stable connection."))
+                    return@flow
+                }
+
                 emit(DownloadState.Complete)
             }
         } catch (throwable: Throwable) {
-            if (tempFile.exists()) {
-                tempFile.delete()
-            }
             emit(DownloadState.Error(toUserDownloadError(throwable)))
         }
     }.flowOn(Dispatchers.IO)
+
+    private fun File.hasValidChecksum(model: ModelOption): Boolean {
+        val expected = model.sha256?.trim()?.lowercase().takeUnless { it.isNullOrBlank() } ?: return true
+        return sha256() == expected
+    }
+
+    private fun File.sha256(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString(separator = "") { byte -> "%02x".format(byte) }
+    }
 
     private fun toUserDownloadError(throwable: Throwable): String {
         val normalized = throwable.message.orEmpty().lowercase()

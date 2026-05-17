@@ -82,6 +82,8 @@ fun DownloadScreen(
 ) {
     val state by viewModel.downloadState.collectAsStateWithLifecycle()
     val activeModelId by viewModel.activeModelId.collectAsStateWithLifecycle()
+    val activeModelIds by viewModel.activeModelIds.collectAsStateWithLifecycle()
+    val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
     val lastTouchedModelId by viewModel.lastTouchedModelId.collectAsStateWithLifecycle()
     val selectedModelId by viewModel.selectedModelId.collectAsStateWithLifecycle()
     val huggingFaceToken by viewModel.huggingFaceToken.collectAsStateWithLifecycle()
@@ -240,13 +242,13 @@ fun DownloadScreen(
             // Model cards
             items(filteredModels, key = { it.id }) { model ->
                 val localState =
-                    if (activeModelId == model.id || lastTouchedModelId == model.id) state else null
+                    downloadStates[model.id] ?: if (activeModelId == model.id || lastTouchedModelId == model.id) state else null
 
                 ModelCard(
                     model = model,
                     isSelected = selectedModelId == model.id,
                     isDownloaded = downloadedModelIds.contains(model.id),
-                    isActive = activeModelId == model.id,
+                    isActive = activeModelIds.contains(model.id),
                     downloadState = localState,
                     isRecommended = model.id == recommendedModelId,
                     deviceFit = evaluateDeviceFit(model, availableRamGb, availableStorageGb),
@@ -254,7 +256,7 @@ fun DownloadScreen(
                     huggingFaceToken = huggingFaceToken,
                     onUseModel = { viewModel.useModel(model.id) },
                     onTokenChange = viewModel::updateHuggingFaceToken,
-                    onRetry = viewModel::retryActiveModel,
+                    onRetry = { viewModel.retryModel(model.id) },
                     onDeleteModel = { viewModel.deleteModel(model.id) }
                 )
             }
@@ -613,7 +615,15 @@ private fun ModelCard(
                         )
                     } else if (isActive && downloadState is DownloadState.Downloading) {
                         Text(
-                            text = "${formatMb(downloadState.downloadedMB)} MB of ${formatMb(downloadState.totalMB)} MB",
+                            text = buildString {
+                                append("${formatMb(downloadState.downloadedMB)} MB of ${formatMb(downloadState.totalMB)} MB")
+                                if (downloadState.speedMBps > 0f) {
+                                    append(" • ${String.format(Locale.US, "%.1f", downloadState.speedMBps)} MB/s")
+                                }
+                                downloadState.etaSeconds?.let { seconds ->
+                                    append(" • ${formatEta(seconds)} left")
+                                }
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFF888888)
                         )
@@ -743,6 +753,16 @@ private fun HuggingFaceAccessDialog(
 }
 
 private fun formatMb(value: Float): String = String.format(Locale.US, "%.0f", value)
+
+private fun formatEta(totalSeconds: Long): String {
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return if (minutes > 0L) {
+        String.format(Locale.US, "%dm %02ds", minutes, seconds)
+    } else {
+        String.format(Locale.US, "%ds", seconds)
+    }
+}
 
 private data class DeviceFit(
     val message: String,

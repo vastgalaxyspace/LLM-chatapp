@@ -7,11 +7,6 @@ object AssistantResponseCleaner {
     )
     private val thinkStart = Regex("""<think\b[^>]*>""", RegexOption.IGNORE_CASE)
     private val thinkEnd = Regex("""</think>""", RegexOption.IGNORE_CASE)
-    private val fencedCodeBlock = Regex("""```(?:[A-Za-z0-9_-]+)?\s*([\s\S]*?)```""")
-    private val boldOrItalic = Regex("""(\*\*|__|\*|_)(\S(?:.*?\S)?)\1""")
-    private val inlineCode = Regex("""`([^`]+)`""")
-    private val headingMarker = Regex("""(?m)^\s{0,3}#{1,6}\s+""")
-    private val bulletMarker = Regex("""(?m)^\s*[-*+]\s+""")
     private val trailingLineSpaces = Regex("""[ \t]+\n""")
     private val excessiveBlankLines = Regex("""\n{3,}""")
     private val meaningfulText = Regex("""[\p{L}\p{N}]""")
@@ -32,11 +27,6 @@ object AssistantResponseCleaner {
         return cleaned
             .replace("\r\n", "\n")
             .replace('\r', '\n')
-            .replace(fencedCodeBlock) { it.groupValues[1].trim() }
-            .replace(boldOrItalic) { it.groupValues[2] }
-            .replace(inlineCode) { it.groupValues[1] }
-            .replace(headingMarker, "")
-            .replace(bulletMarker, "")
             .replace(trailingLineSpaces, "\n")
             .replace(excessiveBlankLines, "\n\n")
             .trim()

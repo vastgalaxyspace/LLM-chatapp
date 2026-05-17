@@ -45,7 +45,7 @@ class AssistantResponseCleanerTest {
     }
 
     @Test
-    fun removesSimpleMarkdownMarkers() {
+    fun preservesMarkdownMarkersForRendering() {
         val raw = """
             The word **rag** can mean:
             - `cloth`
@@ -53,9 +53,20 @@ class AssistantResponseCleanerTest {
         """.trimIndent()
 
         assertEquals(
-            "The word rag can mean:\ncloth\nteasing",
+            "The word **rag** can mean:\n- `cloth`\n- *teasing*",
             AssistantResponseCleaner.clean(raw)
         )
+    }
+
+    @Test
+    fun preservesFencedCodeBlocksForRendering() {
+        val raw = """
+            ```kotlin
+            val answer = 42
+            ```
+        """.trimIndent()
+
+        assertEquals(raw, AssistantResponseCleaner.clean(raw))
     }
 
     @Test

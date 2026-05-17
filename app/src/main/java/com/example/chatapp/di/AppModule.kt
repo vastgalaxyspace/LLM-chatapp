@@ -2,6 +2,7 @@ package com.example.chatapp.di
 
 import android.content.Context
 import com.example.chatapp.data.preferences.AppPreferences
+import com.example.chatapp.data.preferences.SecureTokenStore
 import com.example.chatapp.data.repository.ChatRepository
 import com.example.chatapp.data.repository.ChatRepositoryImpl
 import com.example.chatapp.domain.usecase.DownloadModelUseCase
@@ -32,5 +33,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideAppPreferences(@ApplicationContext context: Context): AppPreferences = AppPreferences(context)
+    fun provideAppPreferences(
+        @ApplicationContext context: Context,
+        secureTokenStore: SecureTokenStore
+    ): AppPreferences = AppPreferences(context, secureTokenStore)
 }

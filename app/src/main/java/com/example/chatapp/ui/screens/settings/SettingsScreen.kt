@@ -25,7 +25,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -67,8 +71,10 @@ fun SettingsScreen(
     val temperature by viewModel.temperature.collectAsStateWithLifecycle()
     val maxTokens by viewModel.maxTokens.collectAsStateWithLifecycle()
     val huggingFaceToken by viewModel.huggingFaceToken.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     var showClearDialog by remember { mutableStateOf(false) }
     var showDeleteModelDialog by remember { mutableStateOf(false) }
+    var historySearch by remember { mutableStateOf("") }
     val currentModel = ModelCatalog.fromId(selectedModel)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -159,6 +165,17 @@ fun SettingsScreen(
             // PRIVACY section
             SectionLabel("PRIVACY")
             SettingsCard {
+                HistoryTools(
+                    query = historySearch,
+                    results = searchResults,
+                    onQueryChange = {
+                        historySearch = it
+                        viewModel.searchHistory(it)
+                    },
+                    onExportText = { viewModel.shareHistory(ExportFormat.TEXT) },
+                    onExportJson = { viewModel.shareHistory(ExportFormat.JSON) }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 DestructiveRow("Clear Chat History") { showClearDialog = true }
             }
 
@@ -220,6 +237,7 @@ private fun HuggingFaceTokenField(
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
             placeholder = {
                 Text("Required for gated Gemma models")
             },
@@ -230,6 +248,78 @@ private fun HuggingFaceTokenField(
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFF777777)
         )
+    }
+}
+
+@Composable
+private fun HistoryTools(
+    query: String,
+    results: List<com.example.chatapp.data.local.ConversationSearchResult>,
+    onQueryChange: (String) -> Unit,
+    onExportText: () -> Unit,
+    onExportJson: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Conversation History", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF888888))
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            leadingIcon = {
+                Icon(Icons.Rounded.Search, contentDescription = null, tint = Color(0xFF888888))
+            },
+            placeholder = { Text("Search saved conversations") },
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+        )
+        if (query.length >= 2) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                results.take(5).forEach { result ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF252525)
+                    ) {
+                        Text(
+                            text = "${result.role.name.lowercase()}: ${result.snippet}",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFCCCCCC)
+                        )
+                    }
+                }
+                if (results.isEmpty()) {
+                    Text("No matches", style = MaterialTheme.typography.bodySmall, color = Color(0xFF777777))
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            ExportAction("Share TXT", Icons.Rounded.Share, Modifier.weight(1f), onExportText)
+            ExportAction("Share JSON", Icons.Rounded.Code, Modifier.weight(1f), onExportJson)
+        }
+    }
+}
+
+@Composable
+private fun ExportAction(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF242424)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = PrimaryGreen, modifier = Modifier.size(18.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, color = Color.White)
+        }
     }
 }
 

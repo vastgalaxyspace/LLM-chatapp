@@ -36,6 +36,12 @@ class DownloadViewModel @Inject constructor(
     private val _activeModelId = MutableStateFlow<String?>(null)
     val activeModelId: StateFlow<String?> = _activeModelId.asStateFlow()
 
+    private val _activeModelIds = MutableStateFlow<Set<String>>(emptySet())
+    val activeModelIds: StateFlow<Set<String>> = _activeModelIds.asStateFlow()
+
+    private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
+    val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates.asStateFlow()
+
     private val _lastTouchedModelId = MutableStateFlow<String?>(null)
     val lastTouchedModelId: StateFlow<String?> = _lastTouchedModelId.asStateFlow()
 
@@ -53,7 +59,7 @@ class DownloadViewModel @Inject constructor(
         initialValue = ""
     )
 
-    private var downloadJob: Job? = null
+    private val downloadJobs = mutableMapOf<String, Job>()
     private val _openSelectedModel = MutableStateFlow(false)
     val openSelectedModel: StateFlow<Boolean> = _openSelectedModel.asStateFlow()
 
@@ -62,11 +68,10 @@ class DownloadViewModel @Inject constructor(
     fun isDownloaded(modelId: String): Boolean = downloadedModelIds.value.contains(modelId)
 
     fun useModel(modelId: String) {
-        if (downloadJob?.isActive == true) return
         viewModelScope.launch {
-            appPreferences.updateSelectedModel(modelId)
             _lastTouchedModelId.value = modelId
             if (isDownloaded(modelId)) {
+                appPreferences.updateSelectedModel(modelId)
                 chatRepository.closeEngine()
                 _openSelectedModel.value = true
             } else {
@@ -75,27 +80,33 @@ class DownloadViewModel @Inject constructor(
         }
     }
 
-    private suspend fun startDownload(modelId: String) {
-        if (downloadJob?.isActive == true) return
+    private fun startDownload(modelId: String) {
+        if (downloadJobs[modelId]?.isActive == true) return
         val model = ModelCatalog.fromId(modelId)
         _activeModelId.value = modelId
         _lastTouchedModelId.value = modelId
         _downloadState.value = DownloadState.Downloading(0f, 0f, model.sizeMb)
+        _activeModelIds.value = _activeModelIds.value + modelId
+        _downloadStates.value = _downloadStates.value + (modelId to DownloadState.Downloading(0f, 0f, model.sizeMb))
 
-        downloadJob = viewModelScope.launch {
-            downloadModelUseCase().collect { state ->
+        downloadJobs[modelId] = viewModelScope.launch {
+            downloadModelUseCase(modelId).collect { state ->
                 _downloadState.value = state
+                _downloadStates.value = _downloadStates.value + (modelId to state)
                 if (state is DownloadState.Complete) {
                     _downloadedModelIds.value = scanDownloadedModels()
                     appPreferences.updateSelectedModel(modelId)
                     chatRepository.closeEngine()
-                    _activeModelId.value = null
+                    _activeModelIds.value = _activeModelIds.value - modelId
+                    if (_activeModelId.value == modelId) _activeModelId.value = null
                     _openSelectedModel.value = true
                 }
                 if (state is DownloadState.Error) {
-                    _activeModelId.value = null
+                    _activeModelIds.value = _activeModelIds.value - modelId
+                    if (_activeModelId.value == modelId) _activeModelId.value = null
                 }
             }
+            downloadJobs.remove(modelId)
         }
     }
 
@@ -104,9 +115,7 @@ class DownloadViewModel @Inject constructor(
     }
 
     fun deleteModel(modelId: String) {
-        if (downloadJob?.isActive == true && activeModelId.value == modelId) {
-            downloadJob?.cancel()
-        }
+        downloadJobs.remove(modelId)?.cancel()
 
         viewModelScope.launch {
             val model = ModelCatalog.fromId(modelId)
@@ -128,6 +137,8 @@ class DownloadViewModel @Inject constructor(
             if (activeModelId.value == modelId) {
                 _activeModelId.value = null
             }
+            _activeModelIds.value = _activeModelIds.value - modelId
+            _downloadStates.value = _downloadStates.value - modelId
             _lastTouchedModelId.value = modelId
             _downloadState.value = DownloadState.Downloading(0f, 0f, model.sizeMb)
 
@@ -141,9 +152,11 @@ class DownloadViewModel @Inject constructor(
 
     fun retryActiveModel() {
         val modelId = activeModelId.value ?: lastTouchedModelId.value ?: selectedModelId.value
-        viewModelScope.launch {
-            startDownload(modelId)
-        }
+        startDownload(modelId)
+    }
+
+    fun retryModel(modelId: String) {
+        startDownload(modelId)
     }
 
     fun updateHuggingFaceToken(value: String) {
