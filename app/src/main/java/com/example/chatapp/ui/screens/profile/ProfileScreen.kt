@@ -1,6 +1,7 @@
 package com.example.chatapp.ui.screens.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -129,22 +130,34 @@ fun ProfileScreen(
             val totalRamGB = String.format(java.util.Locale.US, "%.1f GB", memoryInfo.totalMem / (1024.0 * 1024 * 1024))
             val availRamGB = String.format(java.util.Locale.US, "%.1f GB", memoryInfo.availMem / (1024.0 * 1024 * 1024))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp)),
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White.copy(alpha = 0.03f)
             ) {
-                StatBlock(value = totalRamGB, label = "Total RAM")
-                StatBlock(value = availRamGB, label = "Free RAM")
-                StatBlock(value = "${profileStats.value.downloadedModels}", label = "Models")
-                StatBlock(value = "${profileStats.value.conversations}", label = "Chats")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    StatBlock(value = totalRamGB, label = "Total RAM")
+                    StatBlock(value = availRamGB, label = "Free RAM")
+                    StatBlock(value = "${profileStats.value.downloadedModels}", label = "Models")
+                    StatBlock(value = "${profileStats.value.conversations}", label = "Chats")
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp)),
                 shape = RoundedCornerShape(20.dp),
-                color = Color(0xFF1E1E1E)
+                color = MaterialTheme.colorScheme.surface
             ) {
                 Column(
                     modifier = Modifier.padding(18.dp),
@@ -166,9 +179,11 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(16.dp)),
                 shape = RoundedCornerShape(16.dp),
-                color = Color(0xFF1E1E1E)
+                color = MaterialTheme.colorScheme.surface
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),

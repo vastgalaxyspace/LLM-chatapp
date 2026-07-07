@@ -1,10 +1,12 @@
 package com.example.chatapp.di
 
 import android.content.Context
+import androidx.work.WorkManager
 import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.preferences.SecureTokenStore
 import com.example.chatapp.data.repository.ChatRepository
 import com.example.chatapp.data.repository.ChatRepositoryImpl
+import com.example.chatapp.data.repository.ModelFileRepository
 import com.example.chatapp.domain.usecase.DownloadModelUseCase
 import dagger.Module
 import dagger.Provides
@@ -30,6 +32,16 @@ object AppModule {
         @ApplicationContext context: Context,
         appPreferences: AppPreferences
     ): DownloadModelUseCase = DownloadModelUseCase(context, appPreferences)
+
+    @Provides
+    @Singleton
+    fun provideModelFileRepository(@ApplicationContext context: Context): ModelFileRepository =
+        ModelFileRepository(context)
+
+    @Provides
+    @Singleton
+    fun provideWorkManager(@ApplicationContext context: Context): WorkManager =
+        WorkManager.getInstance(context)
 
     @Provides
     @Singleton

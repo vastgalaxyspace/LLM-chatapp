@@ -5,15 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.chatapp.data.local.ChatLocalStore
 import com.example.chatapp.data.local.ProfileStats
-import com.example.chatapp.data.model.ModelCatalog
+import com.example.chatapp.data.repository.ModelFileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 data class ProfileUiStats(
@@ -27,16 +26,10 @@ data class ProfileUiStats(
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    chatLocalStore: ChatLocalStore
+    chatLocalStore: ChatLocalStore,
+    modelFileRepository: ModelFileRepository
 ) : ViewModel() {
-    private val downloadedModelCount = flow {
-        val modelsDir = File(context.filesDir, "models")
-        val count = ModelCatalog.all.count {
-            val file = File(modelsDir, it.fileName)
-            file.exists() && file.length() > 0L
-        }
-        emit(count)
-    }
+    private val downloadedModelCount = modelFileRepository.observeDownloadedModelIds().map { it.size }
 
     val stats: StateFlow<ProfileUiStats> = combine(
         chatLocalStore.observeProfileStats(),

@@ -11,6 +11,16 @@ object AssistantResponseCleaner {
     private val excessiveBlankLines = Regex("""\n{3,}""")
     private val meaningfulText = Regex("""[\p{L}\p{N}]""")
 
+    // Common special tokens leaked by on-device LLMs
+    private val specialTokens = Regex(
+        """<\|?(pad|eos|bos|unk|mask|sep|cls|endoftext|im_end|im_start|end|eot_id|start_header_id|end_header_id|begin_of_text|end_of_text|assistant|user|system)\|?>""",
+        RegexOption.IGNORE_CASE
+    )
+    private val xmlStyleSpecialTokens = Regex(
+        """</?(?:s|pad|eos|bos)>""",
+        RegexOption.IGNORE_CASE
+    )
+
     fun clean(raw: String): String {
         if (raw.isBlank()) return raw
 
@@ -25,6 +35,8 @@ object AssistantResponseCleaner {
         }
 
         return cleaned
+            .replace(specialTokens, "")
+            .replace(xmlStyleSpecialTokens, "")
             .replace("\r\n", "\n")
             .replace('\r', '\n')
             .replace(trailingLineSpaces, "\n")

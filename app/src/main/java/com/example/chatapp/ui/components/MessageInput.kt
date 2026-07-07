@@ -80,17 +80,18 @@ fun MessageInput(
         val sendButtonColor by animateColorAsState(
             targetValue = when {
                 isGenerating -> ErrorRed
+                isRecording -> ErrorRed
                 canSend -> PrimaryGreen
-                else -> PrimaryGreen
+                else -> Color.White.copy(alpha = 0.08f)
             },
             animationSpec = spring(stiffness = Spring.StiffnessLow),
             label = "send_btn_color"
         )
 
         val sendIconColor = when {
-            isGenerating -> Color.White
+            isGenerating || isRecording -> Color.White
             canSend -> Color.White
-            else -> Color(0xFFF1F6FF)
+            else -> Color.White.copy(alpha = 0.3f)
         }
 
         Row(
@@ -101,8 +102,8 @@ fun MessageInput(
             Box(
                 modifier = Modifier
                     .size(leadingSize)
-                    .background(Color(0x1FFFFFFF), CircleShape)
-                    .border(1.dp, Color(0x55FFFFFF), CircleShape)
+                    .background(Color.White.copy(alpha = 0.06f), CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
                     .clickable(enabled = enabled && !isGenerating, onClick = onAttachImage),
                 contentAlignment = Alignment.Center
             ) {
@@ -118,8 +119,8 @@ fun MessageInput(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = barHeight)
-                    .background(Color(0x1FFFFFFF), RoundedCornerShape(corner))
-                    .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(corner))
+                    .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(corner))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(corner))
                     .padding(horizontal = if (compact) 10.dp else 12.dp, vertical = 4.dp)
             ) {
                 Row(
@@ -145,7 +146,7 @@ fun MessageInput(
                             }
                         ),
                         textStyle = androidx.compose.ui.text.TextStyle(color = Color.White),
-                        cursorBrush = SolidColor(Color(0xFF2C9DFF)),
+                        cursorBrush = SolidColor(PrimaryGreen),
                         singleLine = true,
                         decorationBox = { innerTextField ->
                             Box(contentAlignment = Alignment.CenterStart) {

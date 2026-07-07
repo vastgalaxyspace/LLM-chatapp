@@ -71,8 +71,8 @@ fun FloatingBottomDock(
                         Brush.horizontalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color(0xFF333333),
-                                Color(0xFF333333),
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                MaterialTheme.colorScheme.surfaceVariant,
                                 Color.Transparent
                             )
                         )
@@ -83,7 +83,7 @@ fun FloatingBottomDock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding(),
-                color = Color(0xFF151515)
+                color = MaterialTheme.colorScheme.surface
             ) {
                 Row(
                     modifier = Modifier

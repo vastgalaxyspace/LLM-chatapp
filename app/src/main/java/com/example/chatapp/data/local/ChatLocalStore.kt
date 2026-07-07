@@ -185,6 +185,17 @@ class ChatLocalStore @Inject constructor(
         nextConversationId
     }
 
+    suspend fun renameConversation(conversationId: Long, newTitle: String) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.update(
+            TABLE_CONVERSATIONS,
+            ContentValues().apply { put(COL_CONVERSATION_TITLE, newTitle.trim().take(80)) },
+            "$COL_CONVERSATION_ID = ?",
+            arrayOf(conversationId.toString())
+        )
+        notifyChange()
+    }
+
     private fun loadConversationMessages(conversationId: Long): List<ChatMessage> {
         val db = dbHelper.readableDatabase
         return db.query(
@@ -510,13 +521,6 @@ class ChatLocalStore @Inject constructor(
                     FROM $TABLE_MESSAGES
                     """.trimIndent()
                 )
-            }
-        }
-
-        override fun onOpen(db: SQLiteDatabase) {
-            super.onOpen(db)
-            if (!db.isReadOnly) {
-                createFtsTable(db)
             }
         }
 

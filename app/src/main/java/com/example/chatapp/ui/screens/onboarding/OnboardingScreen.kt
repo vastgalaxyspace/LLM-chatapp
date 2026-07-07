@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.example.chatapp.ui.components.BrandMark
 import com.example.chatapp.ui.theme.DarkBackground
 import com.example.chatapp.ui.theme.PrimaryGreen
+import com.example.chatapp.ui.theme.PrimaryGreenLight
 
 @Composable
 fun OnboardingScreen(
@@ -64,8 +66,11 @@ fun OnboardingScreen(
 
             Text(
                 text = "InnoAI",
-                style = if (compact) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,
-                color = Color.White,
+                style = (if (compact) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge).copy(
+                    brush = Brush.linearGradient(
+                        colors = listOf(Color.White, PrimaryGreenLight)
+                    )
+                ),
                 fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center
             )
@@ -82,8 +87,9 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(if (compact) 22.dp else 36.dp))
 
             Column(
+                modifier = Modifier.align(Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp),
-                modifier = Modifier.fillMaxWidth()
+                horizontalAlignment = Alignment.Start
             ) {
                 FeatureBullet("100% on-device processing", compact = compact)
                 FeatureBullet("LiteRT-LM powered local models", compact = compact)

@@ -6,35 +6,14 @@ import android.media.MediaRecorder
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -43,38 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.ChatBubbleOutline
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.EditNote
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.Hub
-import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.DismissibleDrawerSheet
-import androidx.compose.material3.DismissibleNavigationDrawer
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,13 +32,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.chatapp.data.local.ConversationSummary
 import com.example.chatapp.data.model.MessageRole
@@ -100,9 +50,8 @@ import com.example.chatapp.ui.components.TypingIndicator
 import com.example.chatapp.ui.theme.DarkBackground
 import com.example.chatapp.ui.theme.PrimaryGreen
 import kotlinx.coroutines.launch
-import androidx.compose.material3.rememberDrawerState
-import androidx.core.content.ContextCompat
 import java.io.File
+import java.util.Locale
 
 @Composable
 fun ChatScreen(
@@ -122,6 +71,8 @@ fun ChatScreen(
     val activeConversationId by viewModel.activeConversationId.collectAsStateWithLifecycle()
     val conversationHistory by viewModel.conversationHistory.collectAsStateWithLifecycle()
     val selectedModelName by viewModel.selectedModelName.collectAsStateWithLifecycle()
+    val contextWindowPercent by viewModel.contextWindowPercent.collectAsStateWithLifecycle()
+
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -129,33 +80,34 @@ fun ChatScreen(
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
+
     var hasProcessedInitialPrompt by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingTarget by remember { mutableStateOf<File?>(null) }
     var recordingStartedAt by remember { mutableStateOf(0L) }
+
     val isAtBottom by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            messages.isEmpty() || lastVisible >= messages.lastIndex - 1
+            val visibleItems = layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) true
+            else visibleItems.last().index >= layoutInfo.totalItemsCount - 1
         }
     }
 
     fun stopRecording(save: Boolean) {
         val activeRecorder = recorder ?: return
-        runCatching {
-            activeRecorder.stop()
-        }
+        runCatching { activeRecorder.stop() }
         activeRecorder.release()
         recorder = null
         isRecording = false
-
         val target = recordingTarget
         recordingTarget = null
         if (save && target != null) {
-            val durationMillis = SystemClock.elapsedRealtime() - recordingStartedAt
-            viewModel.attachRecordedAudio(target, durationMillis)
+            val duration = SystemClock.elapsedRealtime() - recordingStartedAt
+            viewModel.attachRecordedAudio(target, duration)
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         } else {
             target?.delete()
         }
@@ -163,12 +115,14 @@ fun ChatScreen(
 
     fun startRecording() {
         val target = viewModel.createAudioTarget()
-        val mediaRecorder = MediaRecorder().apply {
+        val mediaRecorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            MediaRecorder(context)
+        } else {
+            @Suppress("DEPRECATION") MediaRecorder()
+        }.apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setAudioEncodingBitRate(128_000)
-            setAudioSamplingRate(44_100)
             setOutputFile(target.absolutePath)
             prepare()
             start()
@@ -177,64 +131,41 @@ fun ChatScreen(
         recordingStartedAt = SystemClock.elapsedRealtime()
         recorder = mediaRecorder
         isRecording = true
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
     }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.attachImage(it) }
     }
 
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            runCatching { startRecording() }
-                .onFailure {
-                    scope.launch {
-                        snackbarHostState.showSnackbar("Couldn't start recording. Please try again.")
-                    }
-                }
-        } else {
-            scope.launch { snackbarHostState.showSnackbar("Microphone permission is needed to record audio.") }
-        }
+    val audioPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startRecording()
+        else scope.launch { snackbarHostState.showSnackbar("Microphone access required for audio notes.") }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            stopRecording(save = false)
-        }
-    }
+    LaunchedEffect(Unit) { viewModel.initEngine() }
 
-    LaunchedEffect(Unit) {
-        viewModel.initEngine()
-    }
+    LaunchedEffect(initialConversationId) { viewModel.openConversation(initialConversationId) }
 
-    LaunchedEffect(initialConversationId) {
-        viewModel.openConversation(initialConversationId)
-    }
-
-    LaunchedEffect(isLoading, errorMessage, initialPrompt, hasProcessedInitialPrompt) {
+    LaunchedEffect(isLoading, errorMessage, initialPrompt) {
         if (!isLoading && errorMessage == null && initialPrompt != null && !hasProcessedInitialPrompt) {
             hasProcessedInitialPrompt = true
             viewModel.sendMessage(initialPrompt)
         }
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty() && isAtBottom) {
+    LaunchedEffect(messages.size, isGenerating) {
+        if (isAtBottom && messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.lastIndex)
         }
-    }
-
-    LaunchedEffect(errorMessage) {
-        errorMessage?.let { snackbarHostState.showSnackbar(it) }
     }
 
     DismissibleNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             DismissibleDrawerSheet(
-                modifier = Modifier.widthIn(min = 260.dp, max = 340.dp),
-                drawerContainerColor = Color(0xFF141414)
+                modifier = Modifier.widthIn(max = 320.dp),
+                drawerContainerColor = Color(0xFF0F0F0F)
             ) {
                 ChatHistoryDrawer(
                     historyItems = conversationHistory,
@@ -243,217 +174,132 @@ fun ChatScreen(
                         viewModel.startNewConversation()
                         scope.launch { drawerState.close() }
                     },
-                    onOpenConversation = { conversationId ->
-                        viewModel.openConversation(conversationId)
+                    onOpenConversation = { id ->
+                        viewModel.openConversation(id)
                         scope.launch { drawerState.close() }
                     },
-                    onDeleteConversation = viewModel::deleteConversation
+                    onDeleteConversation = viewModel::deleteConversation,
+                    onRenameConversation = viewModel::renameConversation
                 )
             }
         }
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val screenWidth = maxWidth
-            val horizontalPad = when {
-                screenWidth >= 900.dp -> 36.dp
-                screenWidth >= 600.dp -> 24.dp
-                screenWidth >= 400.dp -> 16.dp
-                screenWidth >= 360.dp -> 14.dp
-                else -> 8.dp
-            }
-            val isCompact = screenWidth < 360.dp
-            val isLargeLayout = screenWidth >= 600.dp
-
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                containerColor = DarkBackground,
-                contentWindowInsets = WindowInsets(0),
-                snackbarHost = {
-                    SnackbarHost(
-                        hostState = snackbarHostState,
-                        modifier = Modifier.padding(horizontal = horizontalPad, vertical = 8.dp)
-                    ) { data ->
-                        Snackbar(
-                            containerColor = Color(0xFF2A2A2A),
-                            contentColor = Color.White,
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text(
-                                text = data.visuals.message,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Start
-                            )
+        Scaffold(
+            topBar = {
+                ChatTopBar(
+                    isReady = !isLoading && viewModel.isEngineReady(),
+                    modelName = selectedModelName,
+                    onOpenHistory = { scope.launch { if (drawerState.isOpen) drawerState.close() else drawerState.open() } },
+                    onOpenSettings = onOpenSettings,
+                    onOpenModels = onOpenModels,
+                    contextWindowPercent = contextWindowPercent
+                )
+            },
+            containerColor = DarkBackground,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            bottomBar = {
+                ChatBottomInputArea(
+                    isGenerating = isGenerating,
+                    isRecording = isRecording,
+                    isLoading = isLoading,
+                    tokensPerSec = generationTokensPerSecond,
+                    ttft = timeToFirstTokenMillis,
+                    onSend = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.sendMessage(it)
+                    },
+                    onStop = viewModel::stopGeneration,
+                    onAttachImage = { imagePicker.launch("image/*") },
+                    onToggleRecording = {
+                        if (isRecording) stopRecording(true)
+                        else {
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording()
+                            else audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
                     }
-                },
-                topBar = {
-                    ChatTopBar(
-                        isReady = !isLoading && viewModel.isEngineReady(),
-                        modelName = selectedModelName,
-                        onOpenHistory = {
-                            scope.launch {
-                                if (drawerState.isOpen) drawerState.close() else drawerState.open()
-                            }
-                        },
-                        onOpenSettings = onOpenSettings,
-                        onOpenModels = onOpenModels
-                    )
-                },
-                bottomBar = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .windowInsetsPadding(WindowInsets.navigationBars)
-                            .imePadding()
-                            .background(Color.Transparent)
+                )
+            }
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                if (messages.isEmpty()) {
+                    EmptyChatState(modifier = Modifier.fillMaxSize(), compact = false)
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
                     ) {
-                        if (isGenerating && (generationTokensPerSecond != null || timeToFirstTokenMillis != null)) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = horizontalPad, vertical = 2.dp),
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = Color(0xFF1E1E1E)
-                                ) {
-                                    Text(
-                                        text = buildString {
-                                            generationTokensPerSecond?.let {
-                                                append("${String.format(java.util.Locale.US, "%.1f", it)} tok/s")
-                                            }
-                                            timeToFirstTokenMillis?.let {
-                                                if (isNotEmpty()) append(" • ")
-                                                append("TTFT ${it}ms")
-                                            }
-                                        },
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFF9ADFA8)
-                                    )
-                                }
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(
-                                    horizontal = horizontalPad,
-                                    vertical = if (isCompact) 6.dp else 8.dp
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            MessageInput(
-                                modifier = Modifier.widthIn(max = if (isLargeLayout) 920.dp else 640.dp),
-                                isGenerating = isGenerating,
-                                isRecording = isRecording,
-                                enabled = !isLoading,
-                                onSend = { text ->
-                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    keyboardController?.hide()
-                                    viewModel.sendMessage(text)
-                                },
-                                onStop = viewModel::stopGeneration,
-                                onAttachImage = {
-                                    imagePicker.launch("image/*")
-                                },
-                                onToggleRecording = {
-                                    if (isRecording) {
-                                        stopRecording(save = true)
-                                    } else {
-                                        when (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)) {
-                                            PackageManager.PERMISSION_GRANTED -> {
-                                                runCatching { startRecording() }
-                                                    .onFailure {
-                                                        scope.launch {
-                                                            snackbarHostState.showSnackbar("Couldn't start recording. Please try again.")
-                                                        }
-                                                    }
-                                            }
-                                            else -> audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                        }
-                                    }
-                                }
-                            )
+                        items(messages, key = { it.id }) { msg ->
+                            val showTyping = msg.role == MessageRole.AI && msg.isStreaming && AssistantResponseCleaner.clean(msg.content).isBlank()
+                            if (showTyping) TypingIndicator()
+                            else ChatBubble(message = msg, onRetry = { viewModel.retryMessage(it.id) })
                         }
                     }
                 }
-            ) { paddingValues ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(DarkBackground)
-                        .padding(paddingValues)
+
+                AnimatedVisibility(
+                    visible = !isAtBottom,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut()
                 ) {
-                    if (messages.isEmpty()) {
-                        EmptyChatState(
-                            modifier = Modifier.fillMaxSize(),
-                            compact = isCompact,
-                            isLargeLayout = isLargeLayout
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.TopCenter
-                        ) {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .widthIn(max = if (isLargeLayout) 920.dp else 760.dp)
-                                    .padding(horizontal = horizontalPad),
-                                contentPadding = PaddingValues(top = 10.dp, bottom = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 14.dp)
-                            ) {
-                                items(messages, key = { it.id }) { message ->
-                                    val isWaitingForVisibleAiText = message.role == MessageRole.AI &&
-                                        message.isStreaming &&
-                                        AssistantResponseCleaner.clean(message.content).isBlank()
-                                    AnimatedVisibility(
-                                        visible = true,
-                                        enter = slideInVertically(initialOffsetY = { it / 3 }) + fadeIn()
-                                    ) {
-                                        if (isWaitingForVisibleAiText) {
-                                            TypingIndicator()
-                                        } else {
-                                            ChatBubble(
-                                                message = message,
-                                                onRetry = { viewModel.retryMessage(it.id) }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        AnimatedVisibility(
-                            visible = !isAtBottom,
-                            enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = horizontalPad, bottom = 18.dp)
-                        ) {
-                            FloatingActionButton(
-                                onClick = {
-                                    scope.launch {
-                                        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
-                                    }
-                                },
-                                containerColor = PrimaryGreen,
-                                contentColor = Color.White,
-                                shape = CircleShape,
-                                modifier = Modifier.size(46.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.KeyboardArrowDown,
-                                    contentDescription = "Scroll to latest"
-                                )
-                            }
-                        }
+                    FloatingActionButton(
+                        onClick = { scope.launch { listState.animateScrollToItem(messages.lastIndex) } },
+                        containerColor = PrimaryGreen,
+                        contentColor = Color.White,
+                        shape = CircleShape,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ChatBottomInputArea(
+    isGenerating: Boolean,
+    isRecording: Boolean,
+    isLoading: Boolean,
+    tokensPerSec: Float?,
+    ttft: Long?,
+    onSend: (String) -> Unit,
+    onStop: () -> Unit,
+    onAttachImage: () -> Unit,
+    onToggleRecording: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).imePadding()
+    ) {
+        AnimatedVisibility(visible = isGenerating && (tokensPerSec != null || ttft != null)) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
+                Surface(shape = RoundedCornerShape(99.dp), color = Color(0xFF1A1A1A)) {
+                    Text(
+                        text = buildString {
+                            tokensPerSec?.let { append("${String.format(Locale.US, "%.1f", it)} tok/s") }
+                            ttft?.let { if (isNotEmpty()) append(" • "); append("${it}ms TTFT") }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PrimaryGreen.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+
+        Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+            MessageInput(
+                isGenerating = isGenerating,
+                isRecording = isRecording,
+                enabled = !isLoading,
+                onSend = onSend,
+                onStop = onStop,
+                onAttachImage = onAttachImage,
+                onToggleRecording = onToggleRecording
+            )
         }
     }
 }
@@ -464,115 +310,56 @@ private fun ChatTopBar(
     modelName: String,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenModels: (() -> Unit)?
+    onOpenModels: (() -> Unit)?,
+    contextWindowPercent: Float
 ) {
-    val statusDot = if (isReady) PrimaryGreen else Color(0xFFEF5350)
-    val statusGlow = if (isReady) PrimaryGreen.copy(alpha = 0.3f) else Color(0xFFEF5350).copy(alpha = 0.3f)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF141414))
-            .windowInsetsPadding(WindowInsets.statusBars)
+    Surface(
+        color = Color(0xFF0F0F0F),
+        modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 60.dp)
-                .padding(horizontal = 6.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onOpenHistory) {
-                Icon(
-                    imageVector = Icons.Rounded.Menu,
-                    contentDescription = "Open history",
-                    tint = Color(0xFFAAAAAA)
-                )
-            }
-
+        Column {
             Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Brand icon with subtle glow ring
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(PrimaryGreen.copy(alpha = 0.1f), CircleShape)
-                        .border(1.5.dp, PrimaryGreen.copy(alpha = 0.25f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Hub,
-                        contentDescription = null,
-                        tint = PrimaryGreen,
-                        modifier = Modifier.size(22.dp)
-                    )
+                IconButton(onClick = onOpenHistory) {
+                    Icon(Icons.Rounded.Menu, contentDescription = null, tint = Color.Gray)
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "InnoAI",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(statusGlow, CircleShape)
-                                .padding(1.dp)
-                                .background(statusDot, CircleShape)
-                        )
-                        Text(
-                            text = if (isReady) "$modelName ready" else "Model unavailable",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (isReady) Color(0xFF999999) else Color(0xFFEF5350).copy(alpha = 0.85f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+
+                Row(Modifier.weight(1f).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(32.dp).background(PrimaryGreen.copy(0.1f), CircleShape).border(1.dp, PrimaryGreen.copy(0.2f), CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Hub, null, tint = PrimaryGreen, modifier = Modifier.size(18.dp))
+                    }
+                    Column(Modifier.padding(start = 12.dp)) {
+                        Text("InnoAI", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(6.dp).background(if (isReady) PrimaryGreen else Color.Red, CircleShape))
+                            Text(
+                                text = if (isReady) " $modelName ready" else " Engine loading...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray
+                            )
+                        }
                     }
                 }
-            }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { onOpenModels?.invoke() }) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = "Open models",
-                        tint = Color(0xFFAAAAAA)
-                    )
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = Color.Gray)
                 }
                 IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "Settings",
-                        tint = Color(0xFFAAAAAA)
-                    )
+                    Icon(Icons.Rounded.MoreVert, null, tint = Color.Gray)
                 }
             }
-        }
 
-        // Subtle divider line
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(0.5.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xFF333333),
-                            Color(0xFF333333),
-                            Color.Transparent
-                        )
-                    )
+            if (contextWindowPercent > 0.8f) {
+                LinearProgressIndicator(
+                    progress = { contextWindowPercent },
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = if (contextWindowPercent > 0.95f) Color.Red else Color.Yellow,
+                    trackColor = Color.Transparent
                 )
-        )
+            }
+        }
     }
 }
 
@@ -582,209 +369,81 @@ private fun ChatHistoryDrawer(
     activeConversationId: Long?,
     onNewChat: () -> Unit,
     onOpenConversation: (Long) -> Unit,
-    onDeleteConversation: (Long) -> Unit
+    onDeleteConversation: (Long) -> Unit,
+    onRenameConversation: (Long, String) -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF141414))
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 12.dp, vertical = 18.dp)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onNewChat),
-            shape = RoundedCornerShape(14.dp),
-            color = PrimaryGreen
+    var renamingItem by remember { mutableStateOf<ConversationSummary?>(null) }
+    var renameTitle by remember { mutableStateOf("") }
+
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Button(
+            onClick = onNewChat,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
+            shape = RoundedCornerShape(12.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.EditNote,
-                    contentDescription = null,
-                    tint = Color.White
-                )
-                Text(
-                    text = "New Chat",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Icon(Icons.Rounded.Add, null)
+            Spacer(Modifier.width(8.dp))
+            Text("New Chat", fontWeight = FontWeight.Bold)
         }
 
-        Spacer(modifier = Modifier.size(16.dp))
+        Spacer(Modifier.height(24.dp))
+        Text("Recent History", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
+        Spacer(Modifier.height(12.dp))
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.History,
-                contentDescription = null,
-                tint = Color(0xFF888888),
-                modifier = Modifier.size(16.dp)
-            )
-            Text(
-                text = "Recent chats",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color(0xFF888888)
-            )
-        }
-
-        Spacer(modifier = Modifier.size(10.dp))
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (historyItems.isEmpty()) {
-                Text(
-                    text = "No chat history yet.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF777777)
-                )
-            }
-
-            historyItems.forEach { item ->
-                val selected = item.id == activeConversationId
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(historyItems) { item ->
+                val isSelected = item.id == activeConversationId
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenConversation(item.id) },
+                    onClick = { onOpenConversation(item.id) },
+                    modifier = Modifier.fillMaxWidth().pointerInput(item.id) {
+                        detectTapGestures(onLongPress = { renamingItem = item; renameTitle = item.title })
+                    },
                     shape = RoundedCornerShape(12.dp),
-                    color = if (selected) PrimaryGreen.copy(alpha = 0.15f) else Color(0xFF1E1E1E)
+                    color = if (isSelected) PrimaryGreen.copy(0.15f) else Color(0xFF1A1A1A)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.ChatBubbleOutline,
-                                    contentDescription = null,
-                                    tint = if (selected) PrimaryGreen else Color(0xFF9A9A9A),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = item.title,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (selected) PrimaryGreen else Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            IconButton(
-                                onClick = { onDeleteConversation(item.id) },
-                                modifier = Modifier.size(22.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Delete,
-                                    contentDescription = "Delete chat",
-                                    tint = Color(0xFF8A8A8A),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.ChatBubbleOutline, null, tint = if (isSelected) PrimaryGreen else Color.Gray, modifier = Modifier.size(18.dp))
+                        Text(item.title, modifier = Modifier.weight(1f).padding(horizontal = 12.dp), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        IconButton(onClick = { onDeleteConversation(item.id) }, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Rounded.Delete, null, tint = Color.DarkGray, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
             }
         }
     }
+
+    if (renamingItem != null) {
+        AlertDialog(
+            onDismissRequest = { renamingItem = null },
+            title = { Text("Rename Chat") },
+            text = { OutlinedTextField(value = renameTitle, onValueChange = { renameTitle = it }, singleLine = true) },
+            confirmButton = { TextButton(onClick = { onRenameConversation(renamingItem!!.id, renameTitle); renamingItem = null }) { Text("Save", color = PrimaryGreen) } }
+        )
+    }
 }
 
 @Composable
-private fun EmptyChatState(
-    modifier: Modifier = Modifier,
-    compact: Boolean,
-    isLargeLayout: Boolean = false
-) {
-    val horizontalPadding = when {
-        isLargeLayout -> 40.dp
-        compact -> 12.dp
-        else -> 20.dp
-    }
-
-    BoxWithConstraints(modifier = modifier) {
-        val contentMaxWidth = when {
-            maxWidth >= 900.dp -> 520.dp
-            maxWidth >= 600.dp -> 460.dp
-            else -> maxWidth
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
-        ) {
-            Spacer(modifier = Modifier.height(if (compact) 16.dp else 28.dp))
-
-            // Use BrandLockup for a premium branded header
-            BrandLockup(
-                title = "InnoAI",
-                subtitle = "Private offline assistant",
-                large = !compact
-            )
-
-            Spacer(modifier = Modifier.height(if (compact) 12.dp else 20.dp))
-
-            Column(
-                modifier = Modifier
-                    .widthIn(max = contentMaxWidth)
-                    .padding(horizontal = horizontalPadding),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                EmptyHintRow("Text", "Ask questions and keep chats stored locally.")
-                EmptyHintRow("Images", "Attach pictures from your device for local chat context.")
-                EmptyHintRow("Audio", "Record voice notes saved privately on this device.")
-            }
+private fun EmptyChatState(modifier: Modifier, compact: Boolean) {
+    Column(modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        BrandLockup(title = "InnoAI", subtitle = "Your Private Offline Assistant", large = !compact)
+        Spacer(Modifier.height(32.dp))
+        Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SuggestionChip(label = "Explain Quantum Physics", onClick = {})
+            SuggestionChip(label = "Write Kotlin code", onClick = {})
         }
     }
 }
 
 @Composable
-private fun EmptyHintRow(
-    title: String,
-    description: String
-) {
+private fun SuggestionChip(label: String, onClick: () -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF1E1E1E)
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFF1A1A1A),
+        border = BorderStroke(1.dp, Color.White.copy(0.05f))
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF888888)
-            )
-        }
+        Text(label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
     }
 }

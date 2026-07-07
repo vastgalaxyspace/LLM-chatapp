@@ -1,8 +1,9 @@
 package com.example.chatapp.data.local
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
-import android.webkit.MimeTypeMap
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -21,21 +22,35 @@ class LocalMediaStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     suspend fun copyImage(uri: Uri): StoredMedia = withContext(Dispatchers.IO) {
-        val mimeType = context.contentResolver.getType(uri) ?: "image/*"
-        val extension = extensionFor(mimeType) ?: "jpg"
-        val target = File(imageDirectory(), "image_${System.currentTimeMillis()}.$extension")
+        val mimeType = "image/jpeg"
+        val target = File(imageDirectory(), "image_${System.currentTimeMillis()}.jpg")
 
         context.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output ->
-                input.copyTo(output)
+            val original = BitmapFactory.decodeStream(input)
+                ?: error("Could not decode selected image.")
+
+            val maxEdge = 1024
+            val scale = minOf(maxEdge.toFloat() / original.width, maxEdge.toFloat() / original.height, 1f)
+            val scaled = if (scale < 1f) {
+                Bitmap.createScaledBitmap(
+                    original,
+                    (original.width * scale).toInt(),
+                    (original.height * scale).toInt(),
+                    true
+                )
+            } else {
+                original
             }
+
+            target.outputStream().use { out ->
+                scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            }
+
+            if (scaled !== original) scaled.recycle()
+            original.recycle()
         } ?: error("Could not open selected image.")
 
-        StoredMedia(
-            path = target.absolutePath,
-            mimeType = mimeType,
-            sizeBytes = target.length()
-        )
+        StoredMedia(path = target.absolutePath, mimeType = mimeType, sizeBytes = target.length())
     }
 
     fun createAudioTarget(): File {
@@ -59,7 +74,4 @@ class LocalMediaStore @Inject constructor(
 
     private fun audioDirectory(): File =
         File(context.filesDir, "chat_media/audio").apply { mkdirs() }
-
-    private fun extensionFor(mimeType: String): String? =
-        MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
 }

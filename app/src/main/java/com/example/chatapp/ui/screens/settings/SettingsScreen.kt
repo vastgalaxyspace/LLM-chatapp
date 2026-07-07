@@ -1,6 +1,7 @@
 package com.example.chatapp.ui.screens.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -328,7 +329,7 @@ private fun SettingsTopBar(onNavigateBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF141414))
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -363,9 +364,11 @@ private fun SectionLabel(text: String) {
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF1E1E1E)
+        color = MaterialTheme.colorScheme.surface
     ) {
         Column(modifier = Modifier.padding(16.dp), content = content)
     }
@@ -554,9 +557,11 @@ private fun DestructiveBottomDialog(
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp)),
             shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF1E1E1E)
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -593,7 +598,7 @@ private fun DestructiveBottomDialog(
                         .clickable(onClick = onDismiss),
                     shape = RoundedCornerShape(14.dp),
                     color = Color.Transparent,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF333333))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
                 ) {
                     Box(modifier = Modifier.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                         Text("Cancel", color = Color(0xFFBBBBBB), style = MaterialTheme.typography.labelLarge)

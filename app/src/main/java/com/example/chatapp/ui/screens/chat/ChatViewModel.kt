@@ -15,6 +15,7 @@ import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.model.ModelOption
 import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.repository.ChatRepository
+import com.example.chatapp.data.repository.ContextWindowManager
 import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.domain.usecase.SendMessageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,15 +23,18 @@ import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
@@ -40,7 +44,8 @@ class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val chatLocalStore: ChatLocalStore,
     private val localMediaStore: LocalMediaStore,
-    appPreferences: AppPreferences
+    private val contextWindowManager: ContextWindowManager,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -60,8 +65,12 @@ class ChatViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    val estimatedTokensUsed: StateFlow<Int> = contextWindowManager.estimatedTokensUsed
+    val contextWindowPercent: StateFlow<Float> = contextWindowManager.contextWindowPercent
+
     private val _activeConversationId = MutableStateFlow<Long?>(null)
     val activeConversationId: StateFlow<Long?> = _activeConversationId.asStateFlow()
+
     val conversationHistory: StateFlow<List<ConversationSummary>> = chatLocalStore.observeConversationSummaries()
         .stateIn(
             scope = viewModelScope,
@@ -74,37 +83,25 @@ class ChatViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = "GPU"
     )
-    private val effectiveBackend = appPreferences.selectedBackend.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = "GPU"
-    )
-    private val temperature = appPreferences.temperature.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = 0.8f
-    )
-    private val maxTokens = appPreferences.maxTokens.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = 512
-    )
+
     private val selectedModelId = appPreferences.selectedModel.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ModelCatalog.QWEN_SMALL
     )
+
     val selectedModelName: StateFlow<String> = selectedModelId
         .map { modelId -> ModelCatalog.fromId(modelId).displayName }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = ModelCatalog.fromId(ModelCatalog.QWEN_SMALL).displayName
+            initialValue = "Loading..."
         )
 
     private var generationJob: Job? = null
     private var conversationObserverJob: Job? = null
     private var lastStreamingMessageId: String? = null
+    private var initJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -114,44 +111,15 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun openConversation(conversationId: Long?) {
-        viewModelScope.launch {
-            val resolvedId = chatLocalStore.ensureConversation(conversationId)
-            if (_activeConversationId.value == resolvedId) return@launch
-            chatLocalStore.finishAbandonedStreamingMessages()
-            chatRepository.clearConversation()
-            observeConversation(resolvedId)
-        }
-    }
+    /** FIX: bridge for UI audio recording */
+    fun createAudioTarget(): java.io.File = localMediaStore.createAudioTarget()
 
-    fun startNewConversation() {
+    /** FIX: bridge for UI conversation renaming */
+    fun renameConversation(id: Long, title: String) {
         viewModelScope.launch {
-            val newConversationId = chatLocalStore.createNewConversation()
-            chatRepository.clearConversation()
-            observeConversation(newConversationId)
-        }
-    }
-
-    fun deleteConversation(conversationId: Long) {
-        viewModelScope.launch {
-            val deletingActiveConversation = _activeConversationId.value == conversationId
-            val nextConversationId = chatLocalStore.deleteConversation(conversationId)
-            if (deletingActiveConversation) {
-                generationJob?.cancel()
-                _isGenerating.value = false
-                chatRepository.clearConversation()
-                chatLocalStore.finishAbandonedStreamingMessages()
-                observeConversation(nextConversationId)
-            }
-        }
-    }
-
-    private fun observeConversation(conversationId: Long) {
-        _activeConversationId.value = conversationId
-        conversationObserverJob?.cancel()
-        conversationObserverJob = viewModelScope.launch {
-            chatLocalStore.observeConversationMessages(conversationId).collect { items ->
-                _messages.value = items
+            val trimmed = title.trim()
+            if (trimmed.isNotEmpty()) {
+                chatLocalStore.renameConversation(id, trimmed)
             }
         }
     }
@@ -162,22 +130,21 @@ class ChatViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        initJob?.cancel()
+        initJob = viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val requestedBackend = backend.first()
-            val result = chatRepository.initializeEngine(requestedBackend)
+
+            val result = withTimeoutOrNull(60_000L) {
+                val requestedBackend = backend.first()
+                chatRepository.initializeEngine(requestedBackend)
+            }
+
             _isLoading.value = false
-            if (
-                result.isSuccess &&
-                requestedBackend.equals("GPU", ignoreCase = true) &&
-                effectiveBackend.value.equals("CPU", ignoreCase = true)
-            ) {
-                _errorMessage.value = "GPU not available on this device. Switched to CPU."
+            if (result == null) {
+                _errorMessage.value = "Model initialization timed out. Please try again."
             } else {
-                result.exceptionOrNull()?.let {
-                    _errorMessage.value = toUserError(it.message)
-                }
+                result.onFailure { _errorMessage.value = toUserError(it.message) }
             }
         }
     }
@@ -185,41 +152,40 @@ class ChatViewModel @Inject constructor(
     fun sendMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _isGenerating.value || _isLoading.value) return
+
         val selectedModel = ModelCatalog.fromId(selectedModelId.value)
-        val attachments = pendingAttachmentsForPrompt(selectedModel).getOrElse { throwable ->
-            _errorMessage.value = throwable.message ?: "The selected model cannot read the attached media."
+        val attachments = pendingAttachmentsForPrompt(selectedModel).getOrElse {
+            _errorMessage.value = it.message
             return
         }
+
         if ("Text" !in selectedModel.useCases && attachments.isEmpty()) {
-            _errorMessage.value = "${selectedModel.displayName} is not a normal chat model. Open Models and choose a Text model like Qwen 3 or Gemma 3."
+            _errorMessage.value = "Multimodal model selected. Please attach media or switch models."
             return
         }
 
         sendPreparedMessage(trimmed, attachments)
     }
 
+    /** FIX: bridge for regenerations */
     fun retryMessage(messageId: String) {
         if (_isGenerating.value || _isLoading.value) return
 
-        val messages = _messages.value
-        val assistantIndex = messages.indexOfFirst { it.id == messageId && it.role == MessageRole.AI }
-        if (assistantIndex <= 0) return
+        val currentMsgs = _messages.value
+        val assistantIdx = currentMsgs.indexOfFirst { it.id == messageId && it.role == MessageRole.AI }
+        if (assistantIdx <= 0) return
 
-        val previousAssistantIndex = messages.subList(0, assistantIndex).indexOfLast { it.role == MessageRole.AI }
-        val originalTurn = messages.subList(previousAssistantIndex + 1, assistantIndex)
-        val prompt = originalTurn.lastOrNull { it.role == MessageRole.USER && it.type == MessageType.TEXT }
-            ?.content
-            ?.trim()
-            .orEmpty()
+        val turnBoundaryIdx = currentMsgs.subList(0, assistantIdx).indexOfLast { it.role == MessageRole.AI }
+        val targetTurn = currentMsgs.subList(turnBoundaryIdx + 1, assistantIdx)
+
+        val prompt = targetTurn.lastOrNull { it.role == MessageRole.USER && it.type == MessageType.TEXT }
+            ?.content?.trim().orEmpty()
+
         if (prompt.isEmpty()) return
 
-        val selectedModel = ModelCatalog.fromId(selectedModelId.value)
-        val attachments = attachmentsFromMessages(originalTurn, selectedModel).getOrElse { throwable ->
-            _errorMessage.value = throwable.message ?: "The selected model cannot read the attached media."
-            return
-        }
-        if ("Text" !in selectedModel.useCases && attachments.isEmpty()) {
-            _errorMessage.value = "${selectedModel.displayName} is not a normal chat model. Open Models and choose a Text model like Qwen 3 or Gemma 3."
+        val model = ModelCatalog.fromId(selectedModelId.value)
+        val attachments = attachmentsFromMessages(targetTurn, model).getOrElse {
+            _errorMessage.value = it.message
             return
         }
 
@@ -230,269 +196,133 @@ class ChatViewModel @Inject constructor(
         generationJob?.cancel()
         generationJob = viewModelScope.launch {
             val conversationId = chatLocalStore.ensureConversation(_activeConversationId.value)
-            if (_activeConversationId.value != conversationId) {
-                observeConversation(conversationId)
-            }
+            if (_activeConversationId.value != conversationId) observeConversation(conversationId)
 
-            val userMessage = ChatMessage(content = trimmed, role = MessageRole.USER)
-            val aiMessage = ChatMessage(content = "", role = MessageRole.AI, isStreaming = true)
-            lastStreamingMessageId = aiMessage.id
+            val aiMessageId = ChatMessage(content = "", role = MessageRole.AI).id
+            lastStreamingMessageId = aiMessageId
 
-            chatLocalStore.insertMessage(conversationId, userMessage)
-            chatLocalStore.insertMessage(conversationId, aiMessage)
+            chatLocalStore.insertMessage(conversationId, ChatMessage(content = trimmed, role = MessageRole.USER))
+            chatLocalStore.insertMessage(conversationId, ChatMessage(id = aiMessageId, content = "", role = MessageRole.AI, isStreaming = true))
 
             _isGenerating.value = true
-            _generationTokensPerSecond.value = null
-            _timeToFirstTokenMillis.value = null
             _errorMessage.value = null
 
-            var rawAiContent = ""
-            var timedOut = false
-            var streamedChunks = 0
-            var hasFirstToken = false
+            var rawContent = ""
             val startedAt = System.currentTimeMillis()
+            var chunks = 0
+
             try {
-                var generationFailure: Throwable? = null
-                val collectorJob = launch {
-                    runCatching {
-                        sendMessageUseCase(trimmed, temperature.value, maxTokens.value, attachments).collect { token ->
-                            rawAiContent += token
-                            if (!hasFirstToken) {
-                                hasFirstToken = true
-                                _timeToFirstTokenMillis.value = System.currentTimeMillis() - startedAt
-                            }
-                            streamedChunks += 1
-                            val elapsedSeconds = ((System.currentTimeMillis() - startedAt) / 1000f).coerceAtLeast(0.25f)
-                            _generationTokensPerSecond.value = streamedChunks / elapsedSeconds
-                            val cleanedContent = AssistantResponseCleaner.clean(rawAiContent)
-                            chatLocalStore.updateMessageContent(
-                                messageId = aiMessage.id,
-                                content = cleanedContent.takeIf { AssistantResponseCleaner.hasVisibleAnswer(it) }.orEmpty(),
-                                isStreaming = true
-                            )
-                        }
-                    }.onFailure { throwable ->
-                        generationFailure = throwable
+                sendMessageUseCase(trimmed, appPreferences.temperature.first(), appPreferences.maxTokens.first(), attachments)
+                    .flowOn(Dispatchers.Default)
+                    .collect { token ->
+                        if (chunks == 0) _timeToFirstTokenMillis.value = System.currentTimeMillis() - startedAt
+                        chunks++
+                        rawContent += token
+                        _generationTokensPerSecond.value = chunks / ((System.currentTimeMillis() - startedAt) / 1000f).coerceAtLeast(0.1f)
+                        val cleaned = AssistantResponseCleaner.clean(rawContent)
+                        chatLocalStore.updateMessageContent(aiMessageId, cleaned, true)
                     }
-                }
-
-                val startedStreaming = withTimeoutOrNull(FIRST_TOKEN_TIMEOUT_MS) {
-                    while (!hasFirstToken && collectorJob.isActive) {
-                        delay(100L)
-                    }
-                    hasFirstToken || !collectorJob.isActive
-                } == true
-
-                if (!startedStreaming && !hasFirstToken) {
-                    timedOut = true
-                    Log.w(TAG, "Generation timed out before first token")
-                    collectorJob.cancelAndJoin()
-                } else {
-                    timedOut = withTimeoutOrNull(CHAT_RESPONSE_TIMEOUT_MS) {
-                        collectorJob.join()
-                        true
-                    } != true
-                    if (timedOut) {
-                        Log.w(TAG, "Generation timed out after first token")
-                        collectorJob.cancelAndJoin()
-                    }
-                    generationFailure?.let { throw it }
-                }
-            } catch (throwable: Throwable) {
-                Log.e(TAG, "Generation failed", throwable)
-                _errorMessage.value = toUserError(throwable.message ?: throwable.javaClass.simpleName)
+            } catch (e: Exception) {
+                Log.e(TAG, "Generation failed", e)
+                _errorMessage.value = toUserError(e.message)
             } finally {
                 _isGenerating.value = false
                 _generationTokensPerSecond.value = null
-                _timeToFirstTokenMillis.value = null
-                val finalContent = AssistantResponseCleaner.clean(rawAiContent)
-                chatLocalStore.updateMessageContent(
-                    messageId = aiMessage.id,
-                    content = finalChatContent(finalContent, rawAiContent, timedOut, hasFirstToken),
-                    isStreaming = false
-                )
+                val finalCleaned = AssistantResponseCleaner.clean(rawContent)
+                chatLocalStore.updateMessageContent(aiMessageId, finalCleaned.ifBlank { "Error generating response." }, false)
                 lastStreamingMessageId = null
             }
         }
     }
 
-    private fun pendingAttachmentsForPrompt(selectedModel: ModelOption): Result<List<MessageAttachment>> = runCatching {
-        attachmentsFromMessages(_messages.value.afterLastAssistantMessage(), selectedModel).getOrThrow()
-    }
-
-    private fun attachmentsFromMessages(
-        messages: List<ChatMessage>,
-        selectedModel: ModelOption
-    ): Result<List<MessageAttachment>> = runCatching {
-        messages
-            .filter { it.role == MessageRole.USER && it.type != MessageType.TEXT && !it.mediaUri.isNullOrBlank() }
-            .mapNotNull { message ->
-                val path = message.mediaUri ?: return@mapNotNull null
-                val file = File(path)
-                if (!file.isFile || file.length() <= 0L) {
-                    throw IllegalStateException("The attached media file is no longer available. Attach it again and retry.")
-                }
-
-                val requiredUseCase = when (message.type) {
-                    MessageType.IMAGE -> "Image"
-                    MessageType.AUDIO -> "Audio"
-                    MessageType.TEXT -> return@mapNotNull null
-                }
-                if (requiredUseCase !in selectedModel.useCases) {
-                    throw IllegalStateException("${selectedModel.displayName} cannot read ${requiredUseCase.lowercase()} attachments. Choose a model with $requiredUseCase support.")
-                }
-
-                MessageAttachment(
-                    path = path,
-                    type = message.type,
-                    mimeType = message.mimeType
-                )
-            }
-    }
-
-    private fun List<ChatMessage>.afterLastAssistantMessage(): List<ChatMessage> {
-        val lastAssistantIndex = indexOfLast { it.role == MessageRole.AI }
-        return drop(lastAssistantIndex + 1)
-    }
-
-    private fun finalChatContent(
-        finalContent: String,
-        rawContent: String,
-        timedOut: Boolean,
-        receivedAnyToken: Boolean
-    ): String {
-        if (AssistantResponseCleaner.hasVisibleAnswer(finalContent)) return finalContent
-        return when {
-            timedOut && !receivedAnyToken -> "The model did not start responding. Try CPU mode, a smaller model, or reload the model."
-            timedOut -> "The model took too long to answer. Try a shorter question or choose a faster chat model."
-            rawContent.isNotBlank() -> "The model generated hidden or unreadable output. Please retry, or switch to a non-reasoning chat model."
-            else -> "The model returned no text. Retry once, or reload/download the selected model."
+    private fun observeConversation(conversationId: Long) {
+        _activeConversationId.value = conversationId
+        conversationObserverJob?.cancel()
+        conversationObserverJob = viewModelScope.launch {
+            chatLocalStore.observeConversationMessages(conversationId).collect { _messages.value = it }
         }
-    }
-
-    fun attachImage(uri: android.net.Uri, caption: String? = null) {
-        viewModelScope.launch {
-            runCatching {
-                localMediaStore.copyImage(uri)
-            }.onSuccess { media ->
-                insertLocalMediaMessage(
-                    type = MessageType.IMAGE,
-                    media = media,
-                    content = caption?.trim().takeUnless { it.isNullOrBlank() } ?: "Image attached"
-                )
-            }.onFailure {
-                _errorMessage.value = "Couldn't attach that image. Please try another one."
-            }
-        }
-    }
-
-    fun createAudioTarget(): java.io.File = localMediaStore.createAudioTarget()
-
-    fun attachRecordedAudio(file: java.io.File, durationMillis: Long) {
-        viewModelScope.launch {
-            if (!file.exists() || file.length() == 0L) {
-                _errorMessage.value = "No audio was recorded. Please try again."
-                return@launch
-            }
-
-            insertLocalMediaMessage(
-                type = MessageType.AUDIO,
-                media = localMediaStore.storedAudio(file),
-                content = "Audio note saved locally",
-                durationMillis = durationMillis
-            )
-        }
-    }
-
-    private suspend fun insertLocalMediaMessage(
-        type: MessageType,
-        media: StoredMedia,
-        content: String,
-        durationMillis: Long? = null
-    ) {
-        val conversationId = chatLocalStore.ensureConversation(_activeConversationId.value)
-        if (_activeConversationId.value != conversationId) {
-            observeConversation(conversationId)
-        }
-
-        chatLocalStore.insertMessage(
-            conversationId = conversationId,
-            message = ChatMessage(
-                content = content,
-                role = MessageRole.USER,
-                type = type,
-                mediaUri = media.path,
-                mimeType = media.mimeType,
-                durationMillis = durationMillis
-            )
-        )
     }
 
     fun stopGeneration() {
         generationJob?.cancel()
         _isGenerating.value = false
-        viewModelScope.launch {
-            val messageId = lastStreamingMessageId ?: return@launch
-            val activeAiMessage = _messages.value.lastOrNull { it.id == messageId } ?: return@launch
-            val cleanedContent = AssistantResponseCleaner.clean(activeAiMessage.content)
-            chatLocalStore.updateMessageContent(
-                messageId = messageId,
-                content = cleanedContent.ifBlank { "Generation stopped before a final answer was produced." },
-                isStreaming = false
-            )
-            lastStreamingMessageId = null
+        lastStreamingMessageId = null
+    }
+
+    fun openConversation(id: Long?) = viewModelScope.launch {
+        val resolved = chatLocalStore.ensureConversation(id)
+        if (_activeConversationId.value == resolved) return@launch
+        chatRepository.clearConversation()
+        observeConversation(resolved)
+    }
+
+    fun startNewConversation() = viewModelScope.launch {
+        chatRepository.clearConversation()
+        observeConversation(chatLocalStore.createNewConversation())
+    }
+
+    fun deleteConversation(id: Long) = viewModelScope.launch {
+        if (_activeConversationId.value == id) {
+            stopGeneration()
+            chatRepository.clearConversation()
+        }
+        observeConversation(chatLocalStore.deleteConversation(id))
+    }
+
+    private fun pendingAttachmentsForPrompt(model: ModelOption): Result<List<MessageAttachment>> = runCatching {
+        attachmentsFromMessages(_messages.value.afterLastAssistantMessage(), model).getOrThrow()
+    }
+
+    private fun attachmentsFromMessages(msgs: List<ChatMessage>, model: ModelOption): Result<List<MessageAttachment>> = runCatching {
+        msgs.filter { it.role == MessageRole.USER && it.type != MessageType.TEXT }
+            .map {
+                val typeTag = if (it.type == MessageType.IMAGE) "Image" else "Audio"
+                if (typeTag !in model.useCases) throw IllegalStateException("${model.displayName} doesn't support $typeTag.")
+                MessageAttachment(it.mediaUri!!, it.type, it.mimeType)
+            }
+    }
+
+    private fun List<ChatMessage>.afterLastAssistantMessage(): List<ChatMessage> {
+        val lastIdx = indexOfLast { it.role == MessageRole.AI }
+        return drop(lastIdx + 1)
+    }
+
+    fun attachImage(uri: android.net.Uri) = viewModelScope.launch {
+        runCatching { localMediaStore.copyImage(uri) }
+            .onSuccess { insertLocalMediaMessage(MessageType.IMAGE, it, "Image attached") }
+            .onFailure { _errorMessage.value = "Failed to attach image." }
+    }
+
+    fun attachRecordedAudio(file: java.io.File, duration: Long) = viewModelScope.launch {
+        if (file.exists() && file.length() > 0) {
+            insertLocalMediaMessage(MessageType.AUDIO, localMediaStore.storedAudio(file), "Audio note", duration)
         }
     }
 
-    fun clearChat() {
-        viewModelScope.launch {
-            generationJob?.cancel()
-            _isGenerating.value = false
-            _errorMessage.value = null
-            chatRepository.clearConversation()
-            chatLocalStore.deleteAllHistory()
-            localMediaStore.deleteAllChatMedia()
-            val newConversation = chatLocalStore.latestConversationIdOrCreate()
-            observeConversation(newConversation)
+    private suspend fun insertLocalMediaMessage(type: MessageType, media: StoredMedia, content: String, duration: Long? = null) {
+        val cid = chatLocalStore.ensureConversation(_activeConversationId.value)
+        chatLocalStore.insertMessage(cid, ChatMessage(content = content, role = MessageRole.USER, type = type, mediaUri = media.path, mimeType = media.mimeType, durationMillis = duration))
+    }
+
+    private fun toUserError(raw: String?): String {
+        val msg = raw.orEmpty().lowercase()
+        return when {
+            msg.contains("memory") -> "Device out of memory. Try a smaller model."
+            msg.contains("file not found") -> "Model file missing. Please re-download."
+            msg.contains("gpu") -> "GPU not supported. Switching to CPU."
+            else -> "Generation failed. Please try again."
         }
     }
 
     fun isEngineReady(): Boolean = chatRepository.isEngineReady()
 
-    private fun toUserError(raw: String?): String {
-        val message = raw.orEmpty().trim()
-        val normalized = message.lowercase()
-        return when {
-            normalized.isBlank() ->
-                "Something went wrong. Please try again."
-            normalized.contains("model file not found") ||
-                normalized.contains("no such file") ->
-                "The selected model is missing on this device. Open Models and download it again."
-            normalized.contains("not initialized") ||
-                normalized.contains("engine is not initialized") ->
-                "The AI model is still loading. Please wait a moment and try again."
-            normalized.contains("outofmemory") ||
-                normalized.contains("out of memory") ||
-                normalized.contains("cannot allocate memory") ->
-                "Your device ran out of memory. Close a few apps or use a smaller model."
-            normalized.contains("timeout") ||
-                normalized.contains("timed out") ->
-                "The request took too long. Please try again."
-            normalized.contains("no space left") ||
-                normalized.contains("enospc") ->
-                "Your device storage is full. Free some space and try again."
-            normalized.contains("permission denied") ->
-                "The app cannot access required files right now. Restart the app and try again."
-            normalized.contains("gpu") && normalized.contains("backend") ->
-                "This device cannot run the selected model on GPU. Switch to CPU in Settings and retry."
-            else ->
-                "Couldn't complete your request. Please try again."
-        }
+    override fun onCleared() {
+        super.onCleared()
+        stopGeneration()
+        initJob?.cancel()
     }
 
-    private companion object {
-        const val TAG = "ChatViewModel"
-        const val FIRST_TOKEN_TIMEOUT_MS = 30_000L
-        const val CHAT_RESPONSE_TIMEOUT_MS = 120_000L
+    companion object {
+        private const val TAG = "ChatViewModel"
     }
 }

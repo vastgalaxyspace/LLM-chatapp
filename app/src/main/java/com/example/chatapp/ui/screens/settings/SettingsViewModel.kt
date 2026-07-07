@@ -11,6 +11,7 @@ import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.model.ModelOption
 import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.repository.ChatRepository
+import com.example.chatapp.data.repository.ModelFileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -29,7 +30,8 @@ class SettingsViewModel @Inject constructor(
     private val chatLocalStore: ChatLocalStore,
     private val localMediaStore: LocalMediaStore,
     private val appPreferences: AppPreferences,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val modelFileRepository: ModelFileRepository
 ) : ViewModel() {
     init {
         viewModelScope.launch {
@@ -68,11 +70,28 @@ class SettingsViewModel @Inject constructor(
     private val _exportError = MutableStateFlow<String?>(null)
     val exportError: StateFlow<String?> = _exportError.asStateFlow()
 
+    private val _backendLoading = MutableStateFlow(false)
+    val backendLoading: StateFlow<Boolean> = _backendLoading.asStateFlow()
+
+    private val _backendError = MutableStateFlow<String?>(null)
+    val backendError: StateFlow<String?> = _backendError.asStateFlow()
+
     fun updateBackend(backend: String) {
         viewModelScope.launch {
-            appPreferences.updateSelectedBackend(backend)
-            chatRepository.closeEngine()
-            chatRepository.initializeEngine(backend)
+            _backendLoading.value = true
+            _backendError.value = null
+            try {
+                val result = runCatching {
+                    appPreferences.updateSelectedBackend(backend)
+                    chatRepository.closeEngine()
+                    chatRepository.initializeEngine(backend).getOrThrow()
+                }
+                if (result.isFailure) {
+                    _backendError.value = "Couldn't switch backend. Please try another option."
+                }
+            } finally {
+                _backendLoading.value = false
+            }
         }
     }
 
@@ -148,6 +167,10 @@ class SettingsViewModel @Inject constructor(
         _exportError.value = null
     }
 
+    fun clearBackendError() {
+        _backendError.value = null
+    }
+
     fun currentModel(): ModelOption = ModelCatalog.fromId(selectedModel.value)
 
     fun deleteSelectedModel() {
@@ -162,6 +185,7 @@ class SettingsViewModel @Inject constructor(
             if (partialFile.exists()) {
                 partialFile.delete()
             }
+            modelFileRepository.notifyChange()
             val modelsDir = File(context.filesDir, "models")
             val fallbackModelId = ModelCatalog.all.firstOrNull {
                 val file = File(modelsDir, it.fileName)

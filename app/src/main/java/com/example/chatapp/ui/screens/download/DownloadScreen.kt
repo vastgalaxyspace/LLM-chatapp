@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -287,13 +288,13 @@ private fun FamilyChip(
     Surface(
         modifier = Modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
-        color = if (selected) PrimaryGreen else Color(0xFF2A2A2A)
+        color = if (selected) PrimaryGreen else MaterialTheme.colorScheme.surfaceVariant
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             style = MaterialTheme.typography.labelMedium,
-            color = if (selected) Color.White else Color(0xFF999999)
+            color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -334,7 +335,8 @@ private fun ModelCard(
 
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showDownloadDialog = false },
-            containerColor = Color(0xFF1E1E1E),
+            modifier = Modifier.border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp)),
+            containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = Color.White,
             textContentColor = Color(0xFFCCCCCC),
             title = { Text("Model Specifications") },
@@ -384,7 +386,8 @@ private fun ModelCard(
     if (showDeleteDialog) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            containerColor = Color(0xFF1E1E1E),
+            modifier = Modifier.border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp)),
+            containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = Color.White,
             textContentColor = Color(0xFFCCCCCC),
             title = { Text("Delete model?") },
@@ -410,9 +413,11 @@ private fun ModelCard(
     }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF1E1E1E)
+        color = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier.padding(if (compact) 14.dp else 18.dp),
@@ -470,13 +475,13 @@ private fun ModelCard(
                 // Size badge
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF2A2A2A)
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Text(
                         text = model.sizeLabel,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFFCCCCCC)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 if (isDownloaded) {
@@ -517,13 +522,13 @@ private fun ModelCard(
                 model.useCases.take(3).forEach { tag ->
                     Surface(
                         shape = RoundedCornerShape(999.dp),
-                        color = Color(0xFF2A2A2A)
+                        color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
                             text = "Best for $tag",
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFCCCCCC)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -634,9 +639,10 @@ private fun ModelCard(
             // Action button
             Button(
                 onClick = {
-                    if (downloadState is DownloadState.Error && model.requiresHuggingFaceAccess) showHuggingFaceDialog = true
+                    val hasValidToken = huggingFaceToken.trim().startsWith("hf_")
+                    if (downloadState is DownloadState.Error && model.requiresHuggingFaceAccess && !hasValidToken) showHuggingFaceDialog = true
                     else if (downloadState is DownloadState.Error) onRetry()
-                    else if (!isDownloaded && model.requiresHuggingFaceAccess) showHuggingFaceDialog = true
+                    else if (!isDownloaded && model.requiresHuggingFaceAccess && !hasValidToken) showHuggingFaceDialog = true
                     else if (!isDownloaded) showDownloadDialog = true
                     else onUseModel()
                 },
@@ -703,7 +709,8 @@ private fun HuggingFaceAccessDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1E1E1E),
+        modifier = Modifier.border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp)),
+        containerColor = MaterialTheme.colorScheme.surface,
         titleContentColor = Color.White,
         textContentColor = Color(0xFFCCCCCC),
         title = { Text("Hugging Face access") },
@@ -779,7 +786,7 @@ private fun FriendlyMetric(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(10.dp),
-        color = Color(0xFF252525)
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -788,7 +795,7 @@ private fun FriendlyMetric(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF8A8A8A)
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
             Text(
                 text = value,
