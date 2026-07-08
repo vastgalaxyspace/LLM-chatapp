@@ -14,8 +14,7 @@ data class ModelOption(
     val useCases: Set<String> = setOf("Text"),
     val requiresHuggingFaceAccess: Boolean = false,
     val licenseUrl: String? = null,
-    val sha256: String? = null,
-    val chatTemplate: ChatTemplate = ChatTemplate.Gemma
+    val sha256: String? = null
 )
 
 object ModelCatalog {
@@ -135,8 +134,7 @@ object ModelCatalog {
             quantizationLabel = "8-bit quantization",
             family = "Qwen",
             description = "Strong multilingual Qwen 2.5 chat model.",
-            useCases = setOf("Text", "Code"),
-            chatTemplate = ChatTemplate.ChatML
+            useCases = setOf("Text", "Code")
         ),
         ModelOption(
             id = QWEN_SMALL,
@@ -149,8 +147,7 @@ object ModelCatalog {
             quantizationLabel = "dynamic int8 quantization",
             family = "Qwen",
             description = "Compact Qwen 3 for resource-limited devices.",
-            useCases = setOf("Text"),
-            chatTemplate = ChatTemplate.ChatML
+            useCases = setOf("Text")
         ),
         ModelOption(
             id = DEEPSEEK_R1_QWEN_1_5B,
@@ -163,8 +160,7 @@ object ModelCatalog {
             quantizationLabel = "8-bit quantization",
             family = "DeepSeek",
             description = "Reasoning-focused model for math, planning, and step-by-step answers.",
-            useCases = setOf("Text", "Code"),
-            chatTemplate = ChatTemplate.ChatML
+            useCases = setOf("Text", "Code")
         ),
         ModelOption(
             id = PHI_4_MINI,
@@ -177,8 +173,7 @@ object ModelCatalog {
             quantizationLabel = "8-bit quantization",
             family = "Phi",
             description = "High-quality small instruct model for chat and code on stronger phones.",
-            useCases = setOf("Text", "Code"),
-            chatTemplate = ChatTemplate.Phi
+            useCases = setOf("Text", "Code")
         ),
         ModelOption(
             id = FAST_VLM_0_5B,
@@ -191,8 +186,7 @@ object ModelCatalog {
             quantizationLabel = "dynamic int8 quantization",
             family = "FastVLM",
             description = "Vision-language model for image understanding on device.",
-            useCases = setOf("Image"),
-            chatTemplate = ChatTemplate.PlainInstruct
+            useCases = setOf("Image")
         ),
 
         // ── Utility models ──────────────────────────────────────────────────
@@ -207,8 +201,7 @@ object ModelCatalog {
             quantizationLabel = "8-bit quantization",
             family = "Utility",
             description = "Function calling model for mobile actions.",
-            useCases = setOf("Tools"),
-            chatTemplate = ChatTemplate.PlainInstruct
+            useCases = setOf("Tools")
         )
     )
 

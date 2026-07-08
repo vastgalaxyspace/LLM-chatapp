@@ -7,8 +7,6 @@ interface ChatRepository {
     suspend fun initializeEngine(backend: String): Result<Unit>
     fun sendMessage(
         message: String,
-        temperature: Float,
-        maxTokens: Int,
         attachments: List<MessageAttachment> = emptyList()
     ): Flow<String>
     suspend fun clearConversation()

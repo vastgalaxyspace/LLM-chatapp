@@ -83,12 +83,21 @@ class DownloadModelUseCase @Inject constructor(
             client.newCall(requestBuilder.build()).execute().use { response ->
                 val isResuming = response.code == 206
                 if (!response.isSuccessful) {
-                    emit(DownloadState.Error("Server error (${response.code})"))
+                    val message = when (response.code) {
+                        401, 403 -> "Hugging Face access denied. Accept the model license and add a read token."
+                        else -> "Server error (${response.code})"
+                    }
+                    emit(DownloadState.Error(message))
                     return@flow
                 }
 
                 val body = response.body ?: throw IOException("Empty body")
-                val totalBytes = (if (isResuming) existingBytes else 0L) + body.contentLength()
+                val contentLength = body.contentLength()
+                val totalBytes = if (contentLength > 0L) {
+                    (if (isResuming) existingBytes else 0L) + contentLength
+                } else {
+                    -1L
+                }
 
                 body.byteStream().use { input ->
                     FileOutputStream(tempFile, isResuming).use { output ->
@@ -101,9 +110,17 @@ class DownloadModelUseCase @Inject constructor(
                             downloaded += read
 
                             emit(DownloadState.Downloading(
-                                progress = (downloaded.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f),
+                                progress = if (totalBytes > 0L) {
+                                    (downloaded.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                                } else {
+                                    0f
+                                },
                                 downloadedMB = downloaded / 1024f / 1024f,
-                                totalMB = totalBytes / 1024f / 1024f
+                                totalMB = if (totalBytes > 0L) {
+                                    totalBytes / 1024f / 1024f
+                                } else {
+                                    selectedModel.sizeMb
+                                }
                             ))
                         }
                     }

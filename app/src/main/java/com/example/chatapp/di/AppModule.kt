@@ -3,7 +3,6 @@ package com.example.chatapp.di
 import android.content.Context
 import androidx.work.WorkManager
 import com.example.chatapp.data.preferences.AppPreferences
-import com.example.chatapp.data.preferences.SecureTokenStore
 import com.example.chatapp.data.repository.ChatRepository
 import com.example.chatapp.data.repository.ChatRepositoryImpl
 import com.example.chatapp.data.repository.ModelFileRepository
@@ -43,10 +42,4 @@ object AppModule {
     fun provideWorkManager(@ApplicationContext context: Context): WorkManager =
         WorkManager.getInstance(context)
 
-    @Provides
-    @Singleton
-    fun provideAppPreferences(
-        @ApplicationContext context: Context,
-        secureTokenStore: SecureTokenStore
-    ): AppPreferences = AppPreferences(context, secureTokenStore)
 }

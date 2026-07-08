@@ -10,8 +10,6 @@ class SendMessageUseCase @Inject constructor(
 ) {
     operator fun invoke(
         message: String,
-        temperature: Float,
-        maxTokens: Int,
         attachments: List<MessageAttachment> = emptyList()
-    ): Flow<String> = chatRepository.sendMessage(message, temperature, maxTokens, attachments)
+    ): Flow<String> = chatRepository.sendMessage(message, attachments)
 }

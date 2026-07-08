@@ -105,14 +105,14 @@ class ChatViewModelTest {
         modelCollector.cancel()
 
         assertEquals(
-            "FastVLM 0.5B is not a normal chat model. Open Models and choose a Text model like Qwen 3 or Gemma 3.",
+            "Multimodal model selected. Please attach media or switch models.",
             viewModel.errorMessage.value
         )
     }
 
     @Test
     fun stopGenerationCancelsJobAndSetsIsGeneratingFalse() = runTest(dispatcher) {
-        every { sendMessageUseCase(any(), any(), any(), any()) } returns flow { awaitCancellation() }
+        every { sendMessageUseCase(any(), any()) } returns flow { awaitCancellation() }
         val viewModel = viewModel()
         viewModel.initEngine()
         advanceUntilIdle()
@@ -136,7 +136,7 @@ class ChatViewModelTest {
         viewModel.retryMessage(ai.id)
         advanceUntilIdle()
 
-        verify(exactly = 0) { sendMessageUseCase(any(), any(), any(), any()) }
+        verify(exactly = 0) { sendMessageUseCase(any(), any()) }
     }
 
     @Test
@@ -144,7 +144,7 @@ class ChatViewModelTest {
         val user = ChatMessage(id = "user", content = "hello", role = MessageRole.USER)
         val ai = ChatMessage(id = "ai", content = "answer", role = MessageRole.AI)
         messagesFlow.value = listOf(user, ai)
-        every { sendMessageUseCase(any(), any(), any(), any()) } returns flowOf("ok")
+        every { sendMessageUseCase(any(), any()) } returns flowOf("ok")
         val viewModel = viewModel()
         viewModel.initEngine()
         advanceUntilIdle()
@@ -152,7 +152,7 @@ class ChatViewModelTest {
         viewModel.retryMessage(ai.id)
         advanceUntilIdle()
 
-        verify { sendMessageUseCase("hello", 0.8f, 512, emptyList()) }
+        verify { sendMessageUseCase("hello", emptyList()) }
     }
 
     private fun TestScope.viewModel(): ChatViewModel =

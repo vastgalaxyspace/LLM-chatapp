@@ -8,6 +8,7 @@ import com.example.chatapp.data.preferences.AppPreferences
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
+import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
@@ -94,9 +95,11 @@ class ChatEngineManager @Inject constructor(
             if (contextWindowManager.shouldRebuildConversation(maxNumTokens)) {
                 Log.i(TAG, "Threshold reached. Rebuilding conversation context.")
                 activeConv.close()
-                activeConv = createConfiguredConversation(activeEngine)
+                activeConv = createConfiguredConversation(
+                    activeEngine = activeEngine,
+                    initialMessages = contextWindowManager.retainedMessages()
+                )
                 conversation = activeConv
-                replayRetainedTurns(activeConv)
             }
             activeConv
         }
@@ -128,6 +131,7 @@ class ChatEngineManager @Inject constructor(
 
     suspend fun clearConversation() = withContext(Dispatchers.IO) {
         mutex.withLock {
+            contextWindowManager.reset(currentMaxNumTokens)
             val activeEngine = engine ?: return@withLock
             conversation?.close()
             conversation = createConfiguredConversation(activeEngine)
@@ -137,6 +141,7 @@ class ChatEngineManager @Inject constructor(
     suspend fun close() = withContext(Dispatchers.IO) {
         mutex.withLock {
             closeInternal()
+            contextWindowManager.reset()
         }
     }
 
@@ -189,10 +194,15 @@ class ChatEngineManager @Inject constructor(
         }
     }
 
-    private suspend fun createConfiguredConversation(activeEngine: Engine): Conversation {
+    private suspend fun createConfiguredConversation(
+        activeEngine: Engine,
+        initialMessages: List<Message> = emptyList()
+    ): Conversation {
         val temperature = appPreferences.temperature.first().coerceIn(0.1f, 1.5f)
         return activeEngine.createConversation(
             ConversationConfig(
+                systemInstruction = Contents.of(SYSTEM_PROMPT),
+                initialMessages = initialMessages,
                 samplerConfig = SamplerConfig(
                     topK = 40,
                     topP = 0.95,
@@ -201,13 +211,6 @@ class ChatEngineManager @Inject constructor(
                 )
             )
         )
-    }
-
-    private suspend fun replayRetainedTurns(activeConversation: Conversation) {
-        contextWindowManager.retainedTurns().forEach { (userTurn, _) ->
-            // Replay existing context into the new native conversation instance
-            activeConversation.sendMessageAsync(Message.user(userTurn)).collect()
-        }
     }
 
     private fun closeInternal() {
@@ -231,5 +234,7 @@ class ChatEngineManager @Inject constructor(
 
     private companion object {
         const val TAG = "ChatEngineManager"
+        const val SYSTEM_PROMPT =
+            "You are a helpful private AI assistant running fully on this device. Be concise and accurate. Respond in plain text only unless the user explicitly asks for code or markdown."
     }
 }

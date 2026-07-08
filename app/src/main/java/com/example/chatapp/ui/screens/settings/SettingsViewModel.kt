@@ -105,12 +105,14 @@ class SettingsViewModel @Inject constructor(
     fun updateTemperature(value: Float) {
         viewModelScope.launch {
             appPreferences.updateTemperature(value)
+            chatRepository.closeEngine()
         }
     }
 
     fun updateMaxTokens(value: Int) {
         viewModelScope.launch {
             appPreferences.updateMaxTokens(value)
+            chatRepository.closeEngine()
         }
     }
 

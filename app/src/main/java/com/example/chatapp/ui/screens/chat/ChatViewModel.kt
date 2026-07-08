@@ -212,7 +212,7 @@ class ChatViewModel @Inject constructor(
             var chunks = 0
 
             try {
-                sendMessageUseCase(trimmed, appPreferences.temperature.first(), appPreferences.maxTokens.first(), attachments)
+                sendMessageUseCase(trimmed, attachments)
                     .flowOn(Dispatchers.Default)
                     .collect { token ->
                         if (chunks == 0) _timeToFirstTokenMillis.value = System.currentTimeMillis() - startedAt

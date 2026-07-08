@@ -1,5 +1,6 @@
 package com.example.chatapp.data.repository
 
+import com.google.ai.edge.litertlm.Message
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,11 @@ class ContextWindowManager @Inject constructor() {
 
     @Synchronized
     fun retainedTurns(): List<Pair<String, String>> = retainedTurns.toList()
+
+    @Synchronized
+    fun retainedMessages(): List<Message> = retainedTurns.flatMap { (userTurn, assistantTurn) ->
+        listOf(Message.user(userTurn), Message.model(assistantTurn))
+    }
 
     @Synchronized
     fun shouldRebuildConversation(maxNumTokens: Int): Boolean {
