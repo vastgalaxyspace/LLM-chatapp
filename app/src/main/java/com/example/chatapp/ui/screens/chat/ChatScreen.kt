@@ -1,9 +1,5 @@
 package com.example.chatapp.ui.screens.chat
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.media.MediaRecorder
-import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -28,17 +24,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.chatapp.data.local.ConversationSummary
 import com.example.chatapp.data.model.MessageRole
@@ -50,7 +42,6 @@ import com.example.chatapp.ui.components.TypingIndicator
 import com.example.chatapp.ui.theme.DarkBackground
 import com.example.chatapp.ui.theme.PrimaryGreen
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.Locale
 
 @Composable
@@ -76,16 +67,10 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     var hasProcessedInitialPrompt by remember { mutableStateOf(false) }
-    var isRecording by remember { mutableStateOf(false) }
-    var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var recordingTarget by remember { mutableStateOf<File?>(null) }
-    var recordingStartedAt by remember { mutableStateOf(0L) }
 
     val isAtBottom by remember {
         derivedStateOf {
@@ -96,51 +81,8 @@ fun ChatScreen(
         }
     }
 
-    fun stopRecording(save: Boolean) {
-        val activeRecorder = recorder ?: return
-        runCatching { activeRecorder.stop() }
-        activeRecorder.release()
-        recorder = null
-        isRecording = false
-        val target = recordingTarget
-        recordingTarget = null
-        if (save && target != null) {
-            val duration = SystemClock.elapsedRealtime() - recordingStartedAt
-            viewModel.attachRecordedAudio(target, duration)
-            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        } else {
-            target?.delete()
-        }
-    }
-
-    fun startRecording() {
-        val target = viewModel.createAudioTarget()
-        val mediaRecorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
-            @Suppress("DEPRECATION") MediaRecorder()
-        }.apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setOutputFile(target.absolutePath)
-            prepare()
-            start()
-        }
-        recordingTarget = target
-        recordingStartedAt = SystemClock.elapsedRealtime()
-        recorder = mediaRecorder
-        isRecording = true
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-    }
-
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.attachImage(it) }
-    }
-
-    val audioPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startRecording()
-        else scope.launch { snackbarHostState.showSnackbar("Microphone access required for audio notes.") }
     }
 
     LaunchedEffect(Unit) { viewModel.initEngine() }
@@ -200,7 +142,6 @@ fun ChatScreen(
             bottomBar = {
                 ChatBottomInputArea(
                     isGenerating = isGenerating,
-                    isRecording = isRecording,
                     isLoading = isLoading,
                     tokensPerSec = generationTokensPerSecond,
                     ttft = timeToFirstTokenMillis,
@@ -209,14 +150,7 @@ fun ChatScreen(
                         viewModel.sendMessage(it)
                     },
                     onStop = viewModel::stopGeneration,
-                    onAttachImage = { imagePicker.launch("image/*") },
-                    onToggleRecording = {
-                        if (isRecording) stopRecording(true)
-                        else {
-                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording()
-                            else audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        }
-                    }
+                    onAttachImage = { imagePicker.launch("image/*") }
                 )
             }
         ) { padding ->
@@ -262,14 +196,12 @@ fun ChatScreen(
 @Composable
 private fun ChatBottomInputArea(
     isGenerating: Boolean,
-    isRecording: Boolean,
     isLoading: Boolean,
     tokensPerSec: Float?,
     ttft: Long?,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
-    onAttachImage: () -> Unit,
-    onToggleRecording: () -> Unit
+    onAttachImage: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).imePadding()
@@ -293,12 +225,10 @@ private fun ChatBottomInputArea(
         Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
             MessageInput(
                 isGenerating = isGenerating,
-                isRecording = isRecording,
                 enabled = !isLoading,
                 onSend = onSend,
                 onStop = onStop,
-                onAttachImage = onAttachImage,
-                onToggleRecording = onToggleRecording
+                onAttachImage = onAttachImage
             )
         }
     }

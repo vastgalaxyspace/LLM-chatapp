@@ -20,7 +20,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -66,7 +65,6 @@ class DownloadViewModel @Inject constructor(
         initialValue = ""
     )
 
-    private val downloadJobs = mutableMapOf<String, Job>()
     private val _openSelectedModel = MutableStateFlow(false)
     val openSelectedModel: StateFlow<Boolean> = _openSelectedModel.asStateFlow()
 
@@ -75,6 +73,9 @@ class DownloadViewModel @Inject constructor(
             modelFileRepository.observeDownloadedModelIds().collect {
                 _downloadedModelIds.value = it
             }
+        }
+        ModelCatalog.all.forEach { model ->
+            observeDownloadWork(model.id)
         }
     }
 
@@ -96,7 +97,7 @@ class DownloadViewModel @Inject constructor(
     }
 
     private fun startDownload(modelId: String) {
-        if (downloadJobs[modelId]?.isActive == true) return
+        if (_activeModelIds.value.contains(modelId)) return
         val model = ModelCatalog.fromId(modelId)
         _activeModelId.value = modelId
         _lastTouchedModelId.value = modelId
@@ -107,15 +108,25 @@ class DownloadViewModel @Inject constructor(
         val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
             .setInputData(workDataOf(ModelDownloadWorker.KEY_MODEL_ID to modelId))
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-            .addTag("download_$modelId")
+            .addTag(downloadTag(modelId))
             .build()
 
-        workManager.enqueueUniqueWork("download_$modelId", ExistingWorkPolicy.KEEP, request)
+        workManager.enqueueUniqueWork(downloadWorkName(modelId), ExistingWorkPolicy.KEEP, request)
+    }
 
-        downloadJobs[modelId] = viewModelScope.launch {
-            workManager.getWorkInfosByTagFlow("download_$modelId").collect { infos ->
-                val info = infos.firstOrNull() ?: return@collect
+    private fun observeDownloadWork(modelId: String) {
+        viewModelScope.launch {
+            workManager.getWorkInfosForUniqueWorkFlow(downloadWorkName(modelId)).collect { infos ->
+                val info = infos.firstOrNull { !it.state.isFinished } ?: infos.firstOrNull() ?: return@collect
+                val model = ModelCatalog.fromId(modelId)
                 when (info.state) {
+                    WorkInfo.State.ENQUEUED -> {
+                        val state = DownloadState.Downloading(0f, 0f, model.sizeMb)
+                        _activeModelId.value = modelId
+                        _activeModelIds.value = _activeModelIds.value + modelId
+                        _downloadState.value = state
+                        _downloadStates.value = _downloadStates.value + (modelId to state)
+                    }
                     WorkInfo.State.RUNNING -> {
                         val progress = info.progress.getFloat(ModelDownloadWorker.KEY_PROGRESS, 0f)
                         val dlMb = info.progress.getFloat(ModelDownloadWorker.KEY_DOWNLOADED_MB, 0f)
@@ -127,15 +138,17 @@ class DownloadViewModel @Inject constructor(
                         _downloadStates.value = _downloadStates.value + (modelId to state)
                     }
                     WorkInfo.State.SUCCEEDED -> {
+                        val wasActive = _activeModelIds.value.contains(modelId)
                         modelFileRepository.notifyChange()
                         _downloadedModelIds.value = modelFileRepository.downloadedModelIds()
-                        appPreferences.updateSelectedModel(modelId)
-                        chatRepository.closeEngine()
                         _activeModelIds.value = _activeModelIds.value - modelId
                         _downloadStates.value = _downloadStates.value - modelId
                         if (_activeModelId.value == modelId) _activeModelId.value = null
-                        _openSelectedModel.value = true
-                        downloadJobs.remove(modelId)
+                        if (wasActive) {
+                            appPreferences.updateSelectedModel(modelId)
+                            chatRepository.closeEngine()
+                            _openSelectedModel.value = true
+                        }
                     }
                     WorkInfo.State.FAILED -> {
                         val error = info.outputData.getString(ModelDownloadWorker.KEY_ERROR)
@@ -144,18 +157,13 @@ class DownloadViewModel @Inject constructor(
                         _downloadState.value = DownloadState.Error(error)
                         _activeModelIds.value = _activeModelIds.value - modelId
                         if (_activeModelId.value == modelId) _activeModelId.value = null
-                        downloadJobs.remove(modelId)
                     }
                     WorkInfo.State.CANCELLED -> {
                         _activeModelIds.value = _activeModelIds.value - modelId
                         _downloadStates.value = _downloadStates.value - modelId
                         if (_activeModelId.value == modelId) _activeModelId.value = null
-                        downloadJobs.remove(modelId)
                     }
                     else -> Unit
-                }
-                if (info.state.isFinished) {
-                    return@collect
                 }
             }
         }
@@ -165,9 +173,18 @@ class DownloadViewModel @Inject constructor(
         _openSelectedModel.value = false
     }
 
+    fun cancelDownload(modelId: String) {
+        workManager.cancelUniqueWork(downloadWorkName(modelId))
+        _activeModelIds.value = _activeModelIds.value - modelId
+        _downloadStates.value = _downloadStates.value - modelId
+        if (_activeModelId.value == modelId) {
+            _activeModelId.value = null
+        }
+        _lastTouchedModelId.value = modelId
+    }
+
     fun deleteModel(modelId: String) {
-        downloadJobs.remove(modelId)?.cancel()
-        workManager.cancelUniqueWork("download_$modelId")
+        workManager.cancelUniqueWork(downloadWorkName(modelId))
 
         viewModelScope.launch {
             val model = ModelCatalog.fromId(modelId)
@@ -217,4 +234,8 @@ class DownloadViewModel @Inject constructor(
             appPreferences.updateHuggingFaceToken(value)
         }
     }
+
+    private fun downloadWorkName(modelId: String): String = "download_$modelId"
+
+    private fun downloadTag(modelId: String): String = "download_$modelId"
 }

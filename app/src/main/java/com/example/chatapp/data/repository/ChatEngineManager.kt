@@ -6,6 +6,7 @@ import android.util.Log
 import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.preferences.AppPreferences
 import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
@@ -103,14 +104,13 @@ class ChatEngineManager @Inject constructor(
             }
             activeConv
         }
-
         var previousText = ""
         var chunkCount = 0
 
         activeConversation.sendMessageAsync(message)
             .collect { chunk ->
                 chunkCount++
-                val fullText = chunk.toString()
+                val fullText = chunk.textContent()
                 val delta = if (fullText.startsWith(previousText)) {
                     fullText.removePrefix(previousText)
                 } else {
@@ -231,6 +231,11 @@ class ChatEngineManager @Inject constructor(
             }
         }
     }
+
+    private fun Message.textContent(): String = contents.contents
+        .filterIsInstance<Content.Text>()
+        .joinToString(separator = "") { it.text }
+        .ifBlank { channels.values.joinToString(separator = "") }
 
     private companion object {
         const val TAG = "ChatEngineManager"

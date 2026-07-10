@@ -258,6 +258,7 @@ fun DownloadScreen(
                     onUseModel = { viewModel.useModel(model.id) },
                     onTokenChange = viewModel::updateHuggingFaceToken,
                     onRetry = { viewModel.retryModel(model.id) },
+                    onCancelDownload = { viewModel.cancelDownload(model.id) },
                     onDeleteModel = { viewModel.deleteModel(model.id) }
                 )
             }
@@ -313,6 +314,7 @@ private fun ModelCard(
     onUseModel: () -> Unit,
     onTokenChange: (String) -> Unit,
     onRetry: () -> Unit,
+    onCancelDownload: () -> Unit,
     onDeleteModel: () -> Unit
 ) {
     val progress = (downloadState as? DownloadState.Downloading)?.progress ?: 0f
@@ -688,6 +690,24 @@ private fun ModelCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Delete Model",
+                        color = ErrorRed,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            } else if (isActive) {
+                TextButton(
+                    onClick = onCancelDownload,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = null,
+                        tint = ErrorRed,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Cancel Download",
                         color = ErrorRed,
                         style = MaterialTheme.typography.labelLarge
                     )

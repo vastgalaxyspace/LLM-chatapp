@@ -24,8 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.KeyboardVoice
-import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,12 +47,10 @@ import com.example.chatapp.ui.theme.PrimaryGreen
 fun MessageInput(
     modifier: Modifier = Modifier,
     isGenerating: Boolean,
-    isRecording: Boolean = false,
     enabled: Boolean,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
-    onAttachImage: () -> Unit = {},
-    onToggleRecording: () -> Unit = {}
+    onAttachImage: () -> Unit = {}
 ) {
     var text by remember { mutableStateOf(TextFieldValue("")) }
 
@@ -80,7 +76,6 @@ fun MessageInput(
         val sendButtonColor by animateColorAsState(
             targetValue = when {
                 isGenerating -> ErrorRed
-                isRecording -> ErrorRed
                 canSend -> PrimaryGreen
                 else -> Color.White.copy(alpha = 0.08f)
             },
@@ -89,7 +84,7 @@ fun MessageInput(
         )
 
         val sendIconColor = when {
-            isGenerating || isRecording -> Color.White
+            isGenerating -> Color.White
             canSend -> Color.White
             else -> Color.White.copy(alpha = 0.3f)
         }
@@ -161,27 +156,10 @@ fun MessageInput(
                         }
                     )
 
-                    if (!hasText && !isGenerating) {
-                        IconButton(
-                            onClick = onToggleRecording,
-                            enabled = enabled,
-                            modifier = Modifier.size(if (compact) 34.dp else 38.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isRecording) Icons.Rounded.MicOff else Icons.Rounded.KeyboardVoice,
-                                contentDescription = if (isRecording) "Stop recording" else "Record audio",
-                                tint = if (isRecording) ErrorRed else Color(0xD9E2E2E2),
-                                modifier = Modifier.size(if (compact) 20.dp else 22.dp)
-                            )
-                        }
-                    }
-
                     IconButton(
                         onClick = {
                             if (isGenerating) {
                                 onStop()
-                            } else if (isRecording) {
-                                onToggleRecording()
                             } else {
                                 val value = text.text.trim()
                                 if (value.isNotEmpty() && enabled) {
@@ -196,7 +174,7 @@ fun MessageInput(
                     ) {
                         Icon(
                             imageVector = when {
-                                isGenerating || isRecording -> Icons.Rounded.Stop
+                                isGenerating -> Icons.Rounded.Stop
                                 hasText -> Icons.Rounded.ArrowUpward
                                 else -> Icons.Rounded.GraphicEq
                             },
