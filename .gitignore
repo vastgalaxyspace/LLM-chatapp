@@ -19,3 +19,32 @@ app/build/
 **/build/
 
 /.idea/
+
+# Release signing (never commit)
+keystore.properties
+*.jks
+*.keystore
+
+# Local AI/editor tooling
+.claude/
+.agents/
+.codex/
+
+# Python-generated caches
+__pycache__/
+*.py[cod]
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Android packages, logs, and profiling output
+*.apk
+*.aab
+*.apks
+*.log
+*.hprof
+
+# Downloaded on-device model files
+*.gguf

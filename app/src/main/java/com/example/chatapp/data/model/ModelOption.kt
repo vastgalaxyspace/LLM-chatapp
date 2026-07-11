@@ -7,14 +7,18 @@ data class ModelOption(
     val downloadUrl: String,
     val sizeLabel: String,
     val sizeMb: Float,
+    val sizeBytes: Long,
     val contextLabel: String,
     val quantizationLabel: String,
-    val family: String = "Gemma",
+    val family: String = "Other",
     val description: String = "",
     val useCases: Set<String> = setOf("Text"),
     val requiresHuggingFaceAccess: Boolean = false,
     val licenseUrl: String? = null,
-    val sha256: String? = null
+    val sha256: String? = null,
+    val revision: String? = null,
+    val downloadable: Boolean = true,
+    val unavailableReason: String? = null
 )
 
 object ModelCatalog {
@@ -31,183 +35,86 @@ object ModelCatalog {
     const val PHI_4_MINI = "phi_4_mini_instruct"
     const val FAST_VLM_0_5B = "fast_vlm_0_5b"
 
-    val all = listOf(
-        // ── Gemma 4 family ──────────────────────────────────────────────────
-        ModelOption(
-            id = GEMMA_4_E2B,
-            displayName = "Gemma 4 E2B IT",
-            fileName = "gemma-4-E2B-it.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
-            sizeLabel = "2.6 GB",
-            sizeMb = 2580f,
-            contextLabel = "32768 tokens",
-            quantizationLabel = "4-bit quantization",
-            family = "Gemma 4",
-            description = "Latest Gemma 4 model, optimised for on-device.",
-            useCases = setOf("Text", "Image", "Code")
-        ),
-        ModelOption(
-            id = GEMMA_4_E4B,
-            displayName = "Gemma 4 E4B IT",
-            fileName = "gemma-4-E4B-it.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm",
-            sizeLabel = "3.7 GB",
-            sizeMb = 3650f,
-            contextLabel = "32768 tokens",
-            quantizationLabel = "4-bit quantization",
-            family = "Gemma 4",
-            description = "Larger Gemma 4 variant with superior quality.",
-            useCases = setOf("Text", "Image", "Code")
-        ),
-        ModelOption(
-            id = GEMMA_3N_E2B,
-            displayName = "Gemma 3n E2B IT",
-            fileName = "gemma-3n-E2B-it-int4.litertlm",
-            downloadUrl = "https://huggingface.co/google/gemma-3n-E2B-it-litert-lm/resolve/main/gemma-3n-E2B-it-int4.litertlm",
-            sizeLabel = "3.66 GB",
-            sizeMb = 3660f,
-            contextLabel = "Multimodal",
-            quantizationLabel = "int4 quantization",
-            family = "Gemma 3n",
-            description = "Multimodal Gemma 3n model for advanced text, image, and audio workflows. Requires Gemma license access on Hugging Face.",
-            useCases = setOf("Text", "Image", "Audio"),
-            requiresHuggingFaceAccess = true,
-            licenseUrl = "https://huggingface.co/google/gemma-3n-E2B-it-litert-lm"
-        ),
-        ModelOption(
-            id = GEMMA_3N_E4B,
-            displayName = "Gemma 3n E4B IT",
-            fileName = "gemma-3n-E4B-it-int4.litertlm",
-            downloadUrl = "https://huggingface.co/google/gemma-3n-E4B-it-litert-lm/resolve/main/gemma-3n-E4B-it-int4.litertlm",
-            sizeLabel = "4.92 GB",
-            sizeMb = 4920f,
-            contextLabel = "Multimodal",
-            quantizationLabel = "int4 quantization",
-            family = "Gemma 3n",
-            description = "Larger multimodal Gemma 3n model with higher quality. Requires Gemma license access on Hugging Face.",
-            useCases = setOf("Text", "Image", "Audio"),
-            requiresHuggingFaceAccess = true,
-            licenseUrl = "https://huggingface.co/google/gemma-3n-E4B-it-litert-lm"
-        ),
+    // All artifacts below are GGUF files served by public, ungated Hugging Face
+    // repositories, pinned to an immutable revision with exact size and SHA-256
+    // taken from the repository's LFS metadata.
+    private const val QWEN3_REVISION = "23749fefcc72300e3a2ad315e1317431b06b590a"
+    private const val QWEN3_SHA256 = "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031"
+    private const val QWEN3_BYTES = 639_446_688L
 
-        // ── Gemma 3 family ──────────────────────────────────────────────────
-        ModelOption(
-            id = GEMMA,
-            displayName = "Gemma 3 1B IT",
-            fileName = "gemma3-1b.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm",
-            sizeLabel = "584 MB",
-            sizeMb = 584f,
-            contextLabel = "4096 tokens",
-            quantizationLabel = "4-bit quantization",
-            family = "Gemma 3",
-            description = "Balanced Gemma 3 model with great performance.",
-            useCases = setOf("Text", "Code"),
-            requiresHuggingFaceAccess = true,
-            licenseUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT"
-        ),
-        ModelOption(
-            id = GEMMA_3_270M,
-            displayName = "Gemma 3 270M IT",
-            fileName = "gemma3-270m-it-q8.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/gemma-3-270m-it/resolve/main/gemma3-270m-it-q8.litertlm",
-            sizeLabel = "304 MB",
-            sizeMb = 304f,
-            contextLabel = "32768 tokens",
-            quantizationLabel = "8-bit quantization",
-            family = "Gemma 3",
-            description = "Tiny Gemma 3 — fastest model with low memory use.",
-            useCases = setOf("Text"),
-            requiresHuggingFaceAccess = true,
-            licenseUrl = "https://huggingface.co/litert-community/gemma-3-270m-it"
-        ),
+    private fun unavailable(id: String, name: String, family: String, useCases: Set<String>, reason: String) =
+        ModelOption(id, name, "$id.gguf", "", "Unavailable", 0f, 0L, "—", "—", family, useCases = useCases, downloadable = false, unavailableReason = reason)
 
-        // ── Qwen family ─────────────────────────────────────────────────────
-        ModelOption(
-            id = QWEN,
-            displayName = "Qwen 2.5 1.5B Instruct",
-            fileName = "qwen2.5-1.5b-instruct.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm",
-            sizeLabel = "1.6 GB",
-            sizeMb = 1600f,
-            contextLabel = "4096 tokens",
-            quantizationLabel = "8-bit quantization",
-            family = "Qwen",
-            description = "Strong multilingual Qwen 2.5 chat model.",
-            useCases = setOf("Text", "Code")
-        ),
+    val all: List<ModelOption> = listOf(
         ModelOption(
             id = QWEN_SMALL,
             displayName = "Qwen 3 0.6B",
-            fileName = "Qwen3-0.6B.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B.litertlm",
-            sizeLabel = "614 MB",
-            sizeMb = 614f,
+            fileName = "Qwen3-0.6B-Q8_0.gguf",
+            downloadUrl = "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/$QWEN3_REVISION/Qwen3-0.6B-Q8_0.gguf",
+            sizeLabel = "610 MB",
+            sizeMb = QWEN3_BYTES / 1024f / 1024f,
+            sizeBytes = QWEN3_BYTES,
             contextLabel = "4096 tokens",
-            quantizationLabel = "dynamic int8 quantization",
+            quantizationLabel = "Q8_0",
             family = "Qwen",
-            description = "Compact Qwen 3 for resource-limited devices.",
-            useCases = setOf("Text")
+            description = "Verified public text model for reliable on-device chat.",
+            useCases = setOf("Text", "Code"),
+            sha256 = QWEN3_SHA256,
+            revision = QWEN3_REVISION
         ),
         ModelOption(
-            id = DEEPSEEK_R1_QWEN_1_5B,
-            displayName = "DeepSeek R1 Qwen 1.5B",
-            fileName = "DeepSeek-R1-Distill-Qwen-1.5B_multi-prefill-seq_q8_ekv4096.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/DeepSeek-R1-Distill-Qwen-1.5B/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B_multi-prefill-seq_q8_ekv4096.litertlm",
-            sizeLabel = "1.83 GB",
-            sizeMb = 1830f,
-            contextLabel = "4096 tokens",
-            quantizationLabel = "8-bit quantization",
-            family = "DeepSeek",
-            description = "Reasoning-focused model for math, planning, and step-by-step answers.",
-            useCases = setOf("Text", "Code")
+            GEMMA, "Gemma 3 1B IT", "gemma-3-1b-it-Q4_K_M.gguf",
+            "https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/f9c28bcd85737ffc5aef028638d3341d49869c27/gemma-3-1b-it-Q4_K_M.gguf",
+            "769 MB", 806_058_240L / 1024f / 1024f, 806_058_240L, "4096 tokens", "Q4_K_M", "Gemma 3",
+            "Verified compact Gemma text and code model.", setOf("Text", "Code"), false,
+            "https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF", "8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135", "f9c28bcd85737ffc5aef028638d3341d49869c27"
         ),
         ModelOption(
-            id = PHI_4_MINI,
-            displayName = "Phi 4 Mini Instruct",
-            fileName = "Phi-4-mini-instruct_multi-prefill-seq_q8_ekv4096.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/Phi-4-mini-instruct/resolve/main/Phi-4-mini-instruct_multi-prefill-seq_q8_ekv4096.litertlm",
-            sizeLabel = "3.91 GB",
-            sizeMb = 3910f,
-            contextLabel = "4096 tokens",
-            quantizationLabel = "8-bit quantization",
-            family = "Phi",
-            description = "High-quality small instruct model for chat and code on stronger phones.",
-            useCases = setOf("Text", "Code")
+            QWEN, "Qwen 2.5 1.5B Instruct", "qwen2.5-1.5b-instruct-q8_0.gguf",
+            "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q8_0.gguf",
+            "1.76 GB", 1_894_532_128L / 1024f / 1024f, 1_894_532_128L, "4096 tokens", "Q8_0", "Qwen",
+            "Verified multilingual instruction model for stronger devices.", setOf("Text", "Code"), false, null,
+            "d7efb072e7724d25048a4fda0a3e10b04bdef5d06b1403a1c93bd9f1240a63c8", "91cad51170dc346986eccefdc2dd33a9da36ead9"
+        ),
+        unavailable(GEMMA_4_E2B, "Gemma 4 E2B IT", "Gemma 4", setOf("Text", "Image", "Code"), "Multimodal backend support is not enabled in this text-first build."),
+        unavailable(GEMMA_4_E4B, "Gemma 4 E4B IT", "Gemma 4", setOf("Text", "Image", "Code"), "Multimodal backend support is not enabled in this text-first build."),
+        ModelOption(
+            GEMMA_3_270M, "Gemma 3 270M IT", "gemma-3-270m-it-Q8_0.gguf",
+            "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF/resolve/e7647be17ae1108f2f605ed061ca0608b171afff/gemma-3-270m-it-Q8_0.gguf",
+            "278 MB", 291_545_600L / 1024f / 1024f, 291_545_600L, "4096 tokens", "Q8_0", "Gemma 3",
+            "Verified lightweight Gemma model for low-memory devices.", setOf("Text"), false,
+            "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF", "0ef57d2c838458a1952664260dcba38e5bdda37494f3af732f06e4add24068e3", "e7647be17ae1108f2f605ed061ca0608b171afff"
+        ),
+        unavailable(GEMMA_3N_E2B, "Gemma 3n E2B IT", "Gemma 3n", setOf("Text", "Image", "Audio"), "Multimodal backend support is not enabled in this text-first build."),
+        unavailable(GEMMA_3N_E4B, "Gemma 3n E4B IT", "Gemma 3n", setOf("Text", "Image", "Audio"), "Multimodal backend support is not enabled in this text-first build."),
+        unavailable(FUNCTION_GEMMA, "FunctionGemma 270M", "Utility", setOf("Tools"), "Tool calling is not enabled in this text-first build."),
+        ModelOption(
+            DEEPSEEK_R1_QWEN_1_5B, "DeepSeek R1 Qwen 1.5B", "DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf",
+            "https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/3cb4d15544a2a5e07439592b9a0965b6445fbd34/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf",
+            "1.76 GB", 1_894_532_416L / 1024f / 1024f, 1_894_532_416L, "4096 tokens", "Q8_0", "DeepSeek",
+            "Verified reasoning-focused text and code model.", setOf("Text", "Code"), false, null,
+            "068a721e47419ccfc94b6420118f772478544e1a0d4fad7118212774b3f9ba9e", "3cb4d15544a2a5e07439592b9a0965b6445fbd34"
         ),
         ModelOption(
-            id = FAST_VLM_0_5B,
-            displayName = "FastVLM 0.5B",
-            fileName = "FastVLM-0.5B.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/FastVLM-0.5B/resolve/main/FastVLM-0.5B.litertlm",
-            sizeLabel = "1.16 GB",
-            sizeMb = 1160f,
-            contextLabel = "1280 tokens",
-            quantizationLabel = "dynamic int8 quantization",
-            family = "FastVLM",
-            description = "Vision-language model for image understanding on device.",
-            useCases = setOf("Image")
+            PHI_4_MINI, "Phi 4 Mini Instruct", "Phi-4-mini-instruct-Q4_K_M.gguf",
+            "https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF/resolve/78eb92a46fc37e6b524df991ed9aca9bc6aa7b80/Phi-4-mini-instruct-Q4_K_M.gguf",
+            "2.32 GB", 2_491_874_272L / 1024f / 1024f, 2_491_874_272L, "4096 tokens", "Q4_K_M", "Phi",
+            "Verified high-quality instruction model for high-memory devices.", setOf("Text", "Code"), false, null,
+            "88c00229914083cd112853aab84ed51b87bdf6b9ce42f532d8c85c7c63b1730a", "78eb92a46fc37e6b524df991ed9aca9bc6aa7b80"
         ),
-
-        // ── Utility models ──────────────────────────────────────────────────
-        ModelOption(
-            id = FUNCTION_GEMMA,
-            displayName = "FunctionGemma 270M",
-            fileName = "mobile-actions_q8_ekv1024.litertlm",
-            downloadUrl = "https://huggingface.co/litert-community/functiongemma-mobile-actions_q8_ekv1024.litertlm/resolve/main/mobile-actions_q8_ekv1024.litertlm",
-            sizeLabel = "284 MB",
-            sizeMb = 284f,
-            contextLabel = "1024 tokens",
-            quantizationLabel = "8-bit quantization",
-            family = "Utility",
-            description = "Function calling model for mobile actions.",
-            useCases = setOf("Tools")
-        )
+        unavailable(FAST_VLM_0_5B, "FastVLM 0.5B", "FastVLM", setOf("Image"), "Vision backend support is not enabled in this text-first build.")
     )
 
-    /** All distinct model families for filtering chips. */
+    val available: List<ModelOption> = all.filter { it.downloadable }
+
     val families: List<String> = all.map { it.family }.distinct()
     val useCaseFilters: List<String> = listOf("Text", "Image", "Audio", "Code", "Tools")
 
-    fun fromId(id: String): ModelOption = all.firstOrNull { it.id == id } ?: all.first()
+    fun findById(id: String): ModelOption? = all.firstOrNull { it.id == id }
+
+    fun requireById(id: String): ModelOption = findById(id) ?:
+        throw IllegalArgumentException("Unknown model id: $id")
+
+    /** UI compatibility helper; download and engine code must use requireById. */
+    fun fromId(id: String): ModelOption = findById(id) ?: available.first()
 }

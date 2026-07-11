@@ -16,11 +16,14 @@ import com.example.chatapp.data.model.ModelOption
 import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.repository.ChatRepository
 import com.example.chatapp.data.repository.ContextWindowManager
+import com.example.chatapp.di.DefaultDispatcher
 import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.domain.usecase.SendMessageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +48,8 @@ class ChatViewModel @Inject constructor(
     private val chatLocalStore: ChatLocalStore,
     private val localMediaStore: LocalMediaStore,
     private val contextWindowManager: ContextWindowManager,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    @DefaultDispatcher private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher
 ) : ViewModel() {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -81,7 +85,7 @@ class ChatViewModel @Inject constructor(
     private val backend = appPreferences.selectedBackend.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = "GPU"
+        initialValue = "CPU"
     )
 
     private val selectedModelId = appPreferences.selectedModel.stateIn(
@@ -145,6 +149,11 @@ class ChatViewModel @Inject constructor(
                 _errorMessage.value = "Model initialization timed out. Please try again."
             } else {
                 result.onFailure { _errorMessage.value = toUserError(it.message) }
+                if (result.isSuccess) {
+                    _activeConversationId.value?.let { id ->
+                        chatRepository.restoreConversation(chatLocalStore.loadCompleteTextTurns(id))
+                    }
+                }
             }
         }
     }
@@ -213,7 +222,7 @@ class ChatViewModel @Inject constructor(
 
             try {
                 sendMessageUseCase(trimmed, attachments)
-                    .flowOn(Dispatchers.Default)
+                    .flowOn(defaultDispatcher)
                     .collect { token ->
                         if (chunks == 0) _timeToFirstTokenMillis.value = System.currentTimeMillis() - startedAt
                         chunks++
@@ -222,15 +231,20 @@ class ChatViewModel @Inject constructor(
                         val cleaned = AssistantResponseCleaner.clean(rawContent)
                         chatLocalStore.updateMessageContent(aiMessageId, cleaned, true)
                     }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Log.e(TAG, "Generation failed", e)
                 _errorMessage.value = toUserError(e.message)
             } finally {
-                _isGenerating.value = false
-                _generationTokensPerSecond.value = null
-                val finalCleaned = AssistantResponseCleaner.clean(rawContent)
-                chatLocalStore.updateMessageContent(aiMessageId, finalCleaned.ifBlank { "Error generating response." }, false)
-                lastStreamingMessageId = null
+                withContext(NonCancellable) {
+                    _isGenerating.value = false
+                    _generationTokensPerSecond.value = null
+                    val finalCleaned = AssistantResponseCleaner.clean(rawContent)
+                    if (finalCleaned.isBlank()) chatLocalStore.deleteMessage(aiMessageId)
+                    else chatLocalStore.updateMessageContent(aiMessageId, finalCleaned, false)
+                    lastStreamingMessageId = null
+                }
             }
         }
     }
@@ -244,6 +258,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopGeneration() {
+        chatRepository.cancelGeneration()
         generationJob?.cancel()
         _isGenerating.value = false
         lastStreamingMessageId = null
@@ -254,6 +269,7 @@ class ChatViewModel @Inject constructor(
         if (_activeConversationId.value == resolved) return@launch
         chatRepository.clearConversation()
         observeConversation(resolved)
+        chatRepository.restoreConversation(chatLocalStore.loadCompleteTextTurns(resolved))
     }
 
     fun startNewConversation() = viewModelScope.launch {
@@ -309,6 +325,9 @@ class ChatViewModel @Inject constructor(
         return when {
             msg.contains("memory") -> "Device out of memory. Try a smaller model."
             msg.contains("file not found") -> "Model file missing. Please re-download."
+            msg.contains("validation failed") -> "Model file is incomplete or corrupted. Please re-download it."
+            msg.contains("without text") -> "The model returned no answer. Try CPU mode or re-download the model."
+            msg.contains("abi") -> "This device is not supported by the llama.cpp native runtime."
             msg.contains("gpu") -> "GPU not supported. Switching to CPU."
             else -> "Generation failed. Please try again."
         }

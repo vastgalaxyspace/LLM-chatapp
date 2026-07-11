@@ -1,7 +1,5 @@
 package com.example.chatapp.ui.screens.chat
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -39,8 +37,11 @@ import com.example.chatapp.ui.components.BrandLockup
 import com.example.chatapp.ui.components.ChatBubble
 import com.example.chatapp.ui.components.MessageInput
 import com.example.chatapp.ui.components.TypingIndicator
-import com.example.chatapp.ui.theme.DarkBackground
 import com.example.chatapp.ui.theme.PrimaryGreen
+import com.example.chatapp.ui.theme.chipBackground
+import com.example.chatapp.ui.theme.isDark
+import com.example.chatapp.ui.theme.subtleBorder
+import com.example.chatapp.ui.theme.textHint
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -81,10 +82,6 @@ fun ChatScreen(
         }
     }
 
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { viewModel.attachImage(it) }
-    }
-
     LaunchedEffect(Unit) { viewModel.initEngine() }
 
     LaunchedEffect(initialConversationId) { viewModel.openConversation(initialConversationId) }
@@ -107,7 +104,7 @@ fun ChatScreen(
         drawerContent = {
             DismissibleDrawerSheet(
                 modifier = Modifier.widthIn(max = 320.dp),
-                drawerContainerColor = Color(0xFF0F0F0F)
+                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 ChatHistoryDrawer(
                     historyItems = conversationHistory,
@@ -137,7 +134,7 @@ fun ChatScreen(
                     contextWindowPercent = contextWindowPercent
                 )
             },
-            containerColor = DarkBackground,
+            containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 ChatBottomInputArea(
@@ -149,8 +146,7 @@ fun ChatScreen(
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         viewModel.sendMessage(it)
                     },
-                    onStop = viewModel::stopGeneration,
-                    onAttachImage = { imagePicker.launch("image/*") }
+                    onStop = viewModel::stopGeneration
                 )
             }
         ) { padding ->
@@ -200,15 +196,14 @@ private fun ChatBottomInputArea(
     tokensPerSec: Float?,
     ttft: Long?,
     onSend: (String) -> Unit,
-    onStop: () -> Unit,
-    onAttachImage: () -> Unit
+    onStop: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).imePadding()
     ) {
         AnimatedVisibility(visible = isGenerating && (tokensPerSec != null || ttft != null)) {
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
-                Surface(shape = RoundedCornerShape(99.dp), color = Color(0xFF1A1A1A)) {
+                Surface(shape = RoundedCornerShape(99.dp), color = MaterialTheme.colorScheme.chipBackground) {
                     Text(
                         text = buildString {
                             tokensPerSec?.let { append("${String.format(Locale.US, "%.1f", it)} tok/s") }
@@ -227,8 +222,7 @@ private fun ChatBottomInputArea(
                 isGenerating = isGenerating,
                 enabled = !isLoading,
                 onSend = onSend,
-                onStop = onStop,
-                onAttachImage = onAttachImage
+                onStop = onStop
             )
         }
     }
@@ -243,8 +237,9 @@ private fun ChatTopBar(
     onOpenModels: (() -> Unit)?,
     contextWindowPercent: Float
 ) {
+    val colors = MaterialTheme.colorScheme
     Surface(
-        color = Color(0xFF0F0F0F),
+        color = colors.surfaceContainerLow,
         modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
     ) {
         Column {
@@ -253,7 +248,7 @@ private fun ChatTopBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onOpenHistory) {
-                    Icon(Icons.Rounded.Menu, contentDescription = null, tint = Color.Gray)
+                    Icon(Icons.Rounded.Menu, contentDescription = "Chat history", tint = colors.onSurfaceVariant)
                 }
 
                 Row(Modifier.weight(1f).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -261,23 +256,23 @@ private fun ChatTopBar(
                         Icon(Icons.Rounded.Hub, null, tint = PrimaryGreen, modifier = Modifier.size(18.dp))
                     }
                     Column(Modifier.padding(start = 12.dp)) {
-                        Text("InnoAI", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("InnoAI", style = MaterialTheme.typography.titleMedium, color = colors.onSurface, fontWeight = FontWeight.Bold)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(6.dp).background(if (isReady) PrimaryGreen else Color.Red, CircleShape))
+                            Box(Modifier.size(6.dp).background(if (isReady) PrimaryGreen else colors.error, CircleShape))
                             Text(
                                 text = if (isReady) " $modelName ready" else " Engine loading...",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.Gray
+                                color = colors.onSurfaceVariant
                             )
                         }
                     }
                 }
 
                 IconButton(onClick = { onOpenModels?.invoke() }) {
-                    Icon(Icons.Rounded.AutoAwesome, null, tint = Color.Gray)
+                    Icon(Icons.Rounded.AutoAwesome, contentDescription = "Models", tint = colors.onSurfaceVariant)
                 }
                 IconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Rounded.MoreVert, null, tint = Color.Gray)
+                    Icon(Icons.Rounded.MoreVert, contentDescription = "Settings", tint = colors.onSurfaceVariant)
                 }
             }
 
@@ -285,7 +280,7 @@ private fun ChatTopBar(
                 LinearProgressIndicator(
                     progress = { contextWindowPercent },
                     modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = if (contextWindowPercent > 0.95f) Color.Red else Color.Yellow,
+                    color = if (contextWindowPercent > 0.95f) MaterialTheme.colorScheme.error else Color(0xFFF59E0B),
                     trackColor = Color.Transparent
                 )
             }
@@ -318,7 +313,7 @@ private fun ChatHistoryDrawer(
         }
 
         Spacer(Modifier.height(24.dp))
-        Text("Recent History", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
+        Text("Recent History", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -330,13 +325,13 @@ private fun ChatHistoryDrawer(
                         detectTapGestures(onLongPress = { renamingItem = item; renameTitle = item.title })
                     },
                     shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) PrimaryGreen.copy(0.15f) else Color(0xFF1A1A1A)
+                    color = if (isSelected) PrimaryGreen.copy(0.15f) else MaterialTheme.colorScheme.chipBackground
                 ) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.ChatBubbleOutline, null, tint = if (isSelected) PrimaryGreen else Color.Gray, modifier = Modifier.size(18.dp))
-                        Text(item.title, modifier = Modifier.weight(1f).padding(horizontal = 12.dp), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Rounded.ChatBubbleOutline, null, tint = if (isSelected) PrimaryGreen else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        Text(item.title, modifier = Modifier.weight(1f).padding(horizontal = 12.dp), color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         IconButton(onClick = { onDeleteConversation(item.id) }, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Rounded.Delete, null, tint = Color.DarkGray, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.Delete, contentDescription = "Delete conversation", tint = MaterialTheme.colorScheme.textHint, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -371,9 +366,9 @@ private fun SuggestionChip(label: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF1A1A1A),
-        border = BorderStroke(1.dp, Color.White.copy(0.05f))
+        color = MaterialTheme.colorScheme.chipBackground,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.subtleBorder)
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
+        Text(label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

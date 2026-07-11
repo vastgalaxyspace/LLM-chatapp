@@ -27,6 +27,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
@@ -55,9 +57,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.chatapp.data.model.ModelCatalog
-import com.example.chatapp.ui.theme.DarkBackground
 import com.example.chatapp.ui.theme.ErrorRed
 import com.example.chatapp.ui.theme.PrimaryGreen
+import com.example.chatapp.ui.theme.subtleBorder
+import com.example.chatapp.ui.theme.textHint
 import java.util.Locale
 
 @Composable
@@ -65,6 +68,8 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenModels: (() -> Unit)? = null,
     onOpenChat: (() -> Unit)? = null,
+    isDarkTheme: Boolean = true,
+    onSetDarkTheme: (Boolean) -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val selectedBackend by viewModel.selectedBackend.collectAsStateWithLifecycle()
@@ -89,7 +94,7 @@ fun SettingsScreen(
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = DarkBackground,
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = { SettingsTopBar(onNavigateBack) }
         ) { paddingValues ->
             Box(
@@ -105,6 +110,16 @@ fun SettingsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = horizontalPad, vertical = 12.dp)
                 ) {
+            // APPEARANCE section
+            SectionLabel("APPEARANCE")
+            SettingsCard {
+                Text("Theme", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(10.dp))
+                ThemeSelector(isDarkTheme = isDarkTheme, onSetDarkTheme = onSetDarkTheme)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // MODEL section
             SectionLabel("MODEL")
             SettingsCard {
@@ -135,7 +150,7 @@ fun SettingsScreen(
             // PERFORMANCE section
             SectionLabel("LLM CONFIGURATION")
             SettingsCard {
-                Text("Compute Backend", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF888888))
+                Text("Compute Backend", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(10.dp))
                 SegmentedSelector(listOf("CPU", "GPU"), selectedBackend, viewModel::updateBackend)
                 Spacer(modifier = Modifier.height(16.dp))
@@ -185,7 +200,7 @@ fun SettingsScreen(
                 text = "PRIVATE  |  ON-DEVICE  |  SECURE",
                 modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF444444),
+                color = MaterialTheme.colorScheme.textHint,
                 textAlign = TextAlign.Center
             )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -231,7 +246,7 @@ private fun HuggingFaceTokenField(
         Text(
             text = "Hugging Face Token",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF888888)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         OutlinedTextField(
             value = value,
@@ -242,12 +257,12 @@ private fun HuggingFaceTokenField(
             placeholder = {
                 Text("Required for gated Gemma models")
             },
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
         )
         Text(
             text = "For Gemma 3 downloads, accept the model license on Hugging Face first, then paste a read token here.",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF777777)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -261,17 +276,17 @@ private fun HistoryTools(
     onExportJson: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Conversation History", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF888888))
+        Text("Conversation History", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             leadingIcon = {
-                Icon(Icons.Rounded.Search, contentDescription = null, tint = Color(0xFF888888))
+                Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             },
             placeholder = { Text("Search saved conversations") },
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
         )
         if (query.length >= 2) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -279,18 +294,18 @@ private fun HistoryTools(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF252525)
+                        color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
                             text = "${result.role.name.lowercase()}: ${result.snippet}",
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFCCCCCC)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 if (results.isEmpty()) {
-                    Text("No matches", style = MaterialTheme.typography.bodySmall, color = Color(0xFF777777))
+                    Text("No matches", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -311,7 +326,7 @@ private fun ExportAction(
     Surface(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF242424)
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -319,7 +334,64 @@ private fun ExportAction(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(icon, contentDescription = null, tint = PrimaryGreen, modifier = Modifier.size(18.dp))
-            Text(label, style = MaterialTheme.typography.labelLarge, color = Color.White)
+            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+@Composable
+private fun ThemeSelector(isDarkTheme: Boolean, onSetDarkTheme: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
+            .padding(3.dp)
+    ) {
+        ThemeOption(
+            label = "Light",
+            icon = Icons.Rounded.LightMode,
+            selected = !isDarkTheme,
+            modifier = Modifier.weight(1f)
+        ) { onSetDarkTheme(false) }
+        ThemeOption(
+            label = "Dark",
+            icon = Icons.Rounded.DarkMode,
+            selected = isDarkTheme,
+            modifier = Modifier.weight(1f)
+        ) { onSetDarkTheme(true) }
+    }
+}
+
+@Composable
+private fun ThemeOption(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) PrimaryGreen else Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                label,
+                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }
@@ -339,7 +411,7 @@ private fun SettingsTopBar(onNavigateBack: () -> Unit) {
         Text(
             "Settings",
             style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
         Box(
@@ -366,7 +438,7 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.subtleBorder, RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface
     ) {
@@ -391,7 +463,7 @@ private fun ModelHeader(name: String, sizeLabel: String) {
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
         Surface(
             shape = RoundedCornerShape(8.dp),
@@ -410,9 +482,9 @@ private fun ModelHeader(name: String, sizeLabel: String) {
 @Composable
 private fun MetricBlock(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = Color(0xFF666666))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.textHint)
         Spacer(modifier = Modifier.height(4.dp))
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -436,7 +508,7 @@ private fun ModelSelector(selectedModel: String, onSelect: (String) -> Unit) {
         Text(
             text = "Select Model",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF888888)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Row(
             modifier = Modifier
@@ -444,12 +516,12 @@ private fun ModelSelector(selectedModel: String, onSelect: (String) -> Unit) {
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ModelCatalog.all.forEach { model ->
+            ModelCatalog.available.forEach { model ->
                 Surface(
                     modifier = Modifier
                         .clickable { onSelect(model.id) },
                     shape = RoundedCornerShape(14.dp),
-                    color = if (selectedModel == model.id) PrimaryGreen else Color(0xFF242424)
+                    color = if (selectedModel == model.id) PrimaryGreen else MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -459,13 +531,13 @@ private fun ModelSelector(selectedModel: String, onSelect: (String) -> Unit) {
                         Text(
                             model.displayName,
                             style = MaterialTheme.typography.labelLarge,
-                            color = if (selectedModel == model.id) Color.White else Color(0xFF888888),
+                            color = if (selectedModel == model.id) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1
                         )
                         Text(
                             model.sizeLabel,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (selectedModel == model.id) Color.White.copy(alpha = 0.7f) else Color(0xFF666666)
+                            color = if (selectedModel == model.id) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.textHint
                         )
                     }
                 }
@@ -479,7 +551,7 @@ private fun SegmentedSelector(options: List<String>, selected: String, onSelect:
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF242424), RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
             .padding(3.dp)
     ) {
         options.forEach { option ->
@@ -493,7 +565,7 @@ private fun SegmentedSelector(options: List<String>, selected: String, onSelect:
                 Box(modifier = Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                     Text(
                         option,
-                        color = if (option == selected) Color.White else Color(0xFF888888),
+                        color = if (option == selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
@@ -510,7 +582,7 @@ private fun SliderBlock(title: String, valueText: String, rangeStart: String, ra
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF888888))
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = PrimaryGreen.copy(alpha = 0.12f)
@@ -525,8 +597,8 @@ private fun SliderBlock(title: String, valueText: String, rangeStart: String, ra
         }
         slider()
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(rangeStart, style = MaterialTheme.typography.labelSmall, color = Color(0xFF555555))
-            Text(rangeEnd, style = MaterialTheme.typography.labelSmall, color = Color(0xFF555555))
+            Text(rangeStart, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.textHint)
+            Text(rangeEnd, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.textHint)
         }
     }
 }
@@ -543,7 +615,7 @@ private fun DestructiveRow(text: String, onClick: () -> Unit) {
         Icon(Icons.Rounded.Delete, contentDescription = null, tint = ErrorRed)
         Spacer(modifier = Modifier.width(12.dp))
         Text(text, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = ErrorRed)
-        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Color(0xFF444444))
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.textHint)
     }
 }
 
@@ -559,7 +631,7 @@ private fun DestructiveBottomDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.subtleBorder, RoundedCornerShape(24.dp)),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
@@ -576,9 +648,10 @@ private fun DestructiveBottomDialog(
                     Icon(Icons.Rounded.Delete, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(32.dp))
                 }
                 Spacer(modifier = Modifier.height(18.dp))
-                Text(title, style = MaterialTheme.typography.titleLarge, color = Color.White, textAlign = TextAlign.Center)
+                Text(title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(description, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF888888), textAlign = TextAlign.Center)
+                Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+
                 Spacer(modifier = Modifier.height(20.dp))
                 Surface(
                     modifier = Modifier
@@ -598,10 +671,10 @@ private fun DestructiveBottomDialog(
                         .clickable(onClick = onDismiss),
                     shape = RoundedCornerShape(14.dp),
                     color = Color.Transparent,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.subtleBorder)
                 ) {
                     Box(modifier = Modifier.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
-                        Text("Cancel", color = Color(0xFFBBBBBB), style = MaterialTheme.typography.labelLarge)
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
@@ -613,5 +686,5 @@ private fun DestructiveBottomDialog(
 private fun sliderColors() = SliderDefaults.colors(
     thumbColor = PrimaryGreen,
     activeTrackColor = PrimaryGreen,
-    inactiveTrackColor = Color(0xFF333333)
+    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
 )

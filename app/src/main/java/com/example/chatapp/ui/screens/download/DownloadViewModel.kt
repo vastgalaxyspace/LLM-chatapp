@@ -74,12 +74,12 @@ class DownloadViewModel @Inject constructor(
                 _downloadedModelIds.value = it
             }
         }
-        ModelCatalog.all.forEach { model ->
+        ModelCatalog.available.forEach { model ->
             observeDownloadWork(model.id)
         }
     }
 
-    fun models(): List<ModelOption> = ModelCatalog.all
+    fun models(): List<ModelOption> = ModelCatalog.available
 
     fun isDownloaded(modelId: String): Boolean = downloadedModelIds.value.contains(modelId)
 
@@ -213,7 +213,7 @@ class DownloadViewModel @Inject constructor(
             _downloadState.value = DownloadState.Downloading(0f, 0f, model.sizeMb)
 
             if (selectedModelId.value == modelId) {
-                val fallbackModelId = ModelCatalog.all.firstOrNull { it.id in _downloadedModelIds.value }?.id
+                val fallbackModelId = ModelCatalog.available.firstOrNull { it.id in _downloadedModelIds.value }?.id
                     ?: ModelCatalog.QWEN_SMALL
                 appPreferences.updateSelectedModel(fallbackModelId)
             }

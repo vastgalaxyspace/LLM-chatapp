@@ -59,6 +59,9 @@ import com.example.chatapp.data.model.MessageRole
 import com.example.chatapp.data.model.MessageType
 import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.ui.theme.PrimaryGreen
+import com.example.chatapp.ui.theme.bubbleAssistant
+import com.example.chatapp.ui.theme.isDark
+import com.example.chatapp.ui.theme.textHint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -127,7 +130,7 @@ fun ChatBubble(
                     Text(
                         text = if (message.isStreaming) "Generating..." else "InnoAI",
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (message.isStreaming) PrimaryGreen.copy(alpha = 0.8f) else Color(0xFF888888),
+                        color = if (message.isStreaming) PrimaryGreen.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = if (message.isStreaming) FontWeight.Medium else FontWeight.Normal
                     )
                 }
@@ -147,8 +150,8 @@ fun ChatBubble(
                         } else {
                             Brush.linearGradient(
                                 colors = listOf(
-                                    Color(0xFF262626),
-                                    Color(0xFF262626)
+                                    MaterialTheme.colorScheme.bubbleAssistant,
+                                    MaterialTheme.colorScheme.bubbleAssistant
                                 )
                             )
                         },
@@ -170,7 +173,8 @@ fun ChatBubble(
                         ) {
                             SelectionContainer(modifier = Modifier.weight(1f, fill = false)) {
                                 MarkdownMessageText(
-                                    text = if (displayContent.isNotBlank() && AssistantResponseCleaner.hasVisibleAnswer(displayContent)) {
+                                    isUser = isUser,
+                                    text =if (displayContent.isNotBlank() && AssistantResponseCleaner.hasVisibleAnswer(displayContent)) {
                                         displayContent
                                     } else {
                                         if (!message.isStreaming && message.role == MessageRole.AI) {
@@ -202,7 +206,7 @@ fun ChatBubble(
                 Text(
                     text = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(message.timestamp)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF555555)
+                    color = MaterialTheme.colorScheme.textHint
                 )
                 if (!message.isStreaming && displayContent.isNotBlank()) {
                     IconButton(
@@ -212,7 +216,7 @@ fun ChatBubble(
                         Icon(
                             imageVector = Icons.Rounded.ContentCopy,
                             contentDescription = "Copy message",
-                            tint = Color(0xFF777777),
+                            tint = MaterialTheme.colorScheme.textHint,
                             modifier = Modifier.size(15.dp)
                         )
                     }
@@ -225,7 +229,7 @@ fun ChatBubble(
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "Retry message",
-                            tint = Color(0xFF777777),
+                            tint = MaterialTheme.colorScheme.textHint,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -236,28 +240,33 @@ fun ChatBubble(
 }
 
 @Composable
-private fun MarkdownMessageText(text: String) {
+private fun MarkdownMessageText(text: String, isUser: Boolean = false) {
     val blocks = remember(text) { splitMarkdownBlocks(text) }
+    val darkContext = isUser || MaterialTheme.colorScheme.isDark
+    val bodyColor = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
+    val codeBackground = if (darkContext) Color.Black.copy(alpha = 0.28f) else Color(0xFFF1F5F9)
+    val codeColor = if (darkContext) Color(0xFFEAEAEA) else Color(0xFF334155)
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         blocks.forEach { block ->
             if (block.isCode) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
-                    color = Color.Black.copy(alpha = 0.28f)
+                    color = codeBackground
                 ) {
                     Text(
                         text = block.text,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                        color = Color(0xFFEAEAEA)
+                        color = codeColor
                     )
                 }
             } else {
                 Text(
                     text = inlineMarkdown(block.text),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White
+                    color = bodyColor
                 )
             }
         }

@@ -26,6 +26,18 @@ class AppNavigationViewModel @Inject constructor(
         initialValue = false
     )
 
+    val isDarkTheme: StateFlow<Boolean> = appPreferences.isDarkTheme.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = true
+    )
+
+    fun setDarkTheme(value: Boolean) {
+        viewModelScope.launch {
+            appPreferences.updateDarkTheme(value)
+        }
+    }
+
     fun completeOnboarding() {
         viewModelScope.launch {
             appPreferences.markOnboardingComplete()

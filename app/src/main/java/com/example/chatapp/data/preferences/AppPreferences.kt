@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.example.chatapp.BuildConfig
 import com.example.chatapp.data.model.ModelCatalog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -29,15 +28,25 @@ class AppPreferences @Inject constructor(
         val MaxTokens = intPreferencesKey("max_tokens")
         val HuggingFaceToken = stringPreferencesKey("hugging_face_token")
         val HasCompletedOnboarding = androidx.datastore.preferences.core.booleanPreferencesKey("has_completed_onboarding")
+        val IsDarkTheme = androidx.datastore.preferences.core.booleanPreferencesKey("is_dark_theme")
     }
 
-    val selectedBackend: Flow<String> = context.dataStore.data.map { it[Keys.SelectedBackend] ?: "GPU" }
-    val selectedModel: Flow<String> = context.dataStore.data.map { it[Keys.SelectedModel] ?: ModelCatalog.QWEN_SMALL }
+    val isDarkTheme: Flow<Boolean> = context.dataStore.data.map { it[Keys.IsDarkTheme] ?: true }
+
+    suspend fun updateDarkTheme(value: Boolean) {
+        context.dataStore.edit { it[Keys.IsDarkTheme] = value }
+    }
+
+    val selectedBackend: Flow<String> = context.dataStore.data.map { it[Keys.SelectedBackend] ?: "CPU" }
+    val selectedModel: Flow<String> = context.dataStore.data.map { preferences ->
+        val stored = preferences[Keys.SelectedModel]
+        stored?.takeIf { ModelCatalog.findById(it)?.downloadable == true } ?: ModelCatalog.QWEN_SMALL
+    }
     val temperature: Flow<Float> = context.dataStore.data.map { it[Keys.Temperature] ?: 0.8f }
     val maxTokens: Flow<Int> = context.dataStore.data.map { (it[Keys.MaxTokens] ?: 1536).coerceIn(512, 2048) }
     val hasCompletedOnboarding: Flow<Boolean> = context.dataStore.data.map { it[Keys.HasCompletedOnboarding] ?: false }
     val isModelDownloaded: Flow<Boolean> = context.dataStore.data.map {
-        val selectedModelId = it[Keys.SelectedModel] ?: ModelCatalog.QWEN_SMALL
+        val selectedModelId = it[Keys.SelectedModel]?.takeIf { id -> ModelCatalog.findById(id)?.downloadable == true } ?: ModelCatalog.QWEN_SMALL
         val selectedModelFile = File(context.filesDir, "models/${ModelCatalog.fromId(selectedModelId).fileName}")
         selectedModelFile.exists() && selectedModelFile.length() > 0L
     }
@@ -47,6 +56,7 @@ class AppPreferences @Inject constructor(
     }
 
     suspend fun updateSelectedModel(value: String) {
+        require(ModelCatalog.requireById(value).downloadable) { "Model is unavailable: $value" }
         context.dataStore.edit { it[Keys.SelectedModel] = value }
     }
 
@@ -60,7 +70,7 @@ class AppPreferences @Inject constructor(
 
     val huggingFaceToken: Flow<String> = context.dataStore.data.map { preferences ->
         val legacyToken = preferences[Keys.HuggingFaceToken]?.takeIf { token -> token.isNotBlank() }
-        legacyToken ?: secureTokenStore.readHuggingFaceToken()?.takeIf { token -> token.isNotBlank() } ?: BuildConfig.HUGGING_FACE_TOKEN
+        legacyToken ?: secureTokenStore.readHuggingFaceToken()?.takeIf { token -> token.isNotBlank() } ?: ""
     }
 
     suspend fun updateHuggingFaceToken(value: String) {

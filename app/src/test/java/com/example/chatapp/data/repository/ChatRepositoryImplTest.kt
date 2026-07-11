@@ -2,7 +2,6 @@ package com.example.chatapp.data.repository
 
 import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.preferences.AppPreferences
-import com.google.ai.edge.litertlm.Content
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -20,9 +19,7 @@ class ChatRepositoryImplTest {
         every { appPreferences.selectedModel } returns flowOf(ModelCatalog.QWEN_SMALL)
         every {
             engineManager.send(
-                match { message ->
-                    (message.contents.contents.singleOrNull() as? Content.Text)?.text == "hello"
-                },
+                match { message -> message.text == "hello" && message.role == "user" },
                 "hello"
             )
         } returns flowOf("ok")
@@ -41,9 +38,7 @@ class ChatRepositoryImplTest {
         every { appPreferences.selectedModel } returns flowOf(ModelCatalog.DEEPSEEK_R1_QWEN_1_5B)
         every {
             engineManager.send(
-                match { message ->
-                    (message.contents.contents.singleOrNull() as? Content.Text)?.text == "solve it\n/no_think"
-                },
+                match { message -> message.text == "solve it\n/no_think" },
                 "solve it\n/no_think"
             )
         } returns flowOf("ok")

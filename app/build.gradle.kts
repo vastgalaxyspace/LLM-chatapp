@@ -8,32 +8,55 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        file.inputStream().use { stream -> load(stream) }
-    }
+// Release signing: create keystore.properties in the project root (never commit it) with
+// storeFile=, storePassword=, keyAlias=, keyPassword= to produce a signed release build.
+val keystorePropertiesFile: File = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
-
-fun String.toBuildConfigString(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
     namespace = "com.example.chatapp"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.chatapp"
+        // Play Store rejects com.example.* — unique ID derived from the InnoAI brand.
+        // Must be final before the first Play upload; it can never change afterwards.
+        applicationId = "com.dailyorbitstudio.innoai"
         minSdk = 28
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField(
-            "String",
-            "HUGGING_FACE_TOKEN",
-            (localProperties.getProperty("HF_TOKEN") ?: "").toBuildConfigString()
-        )
+        ndk {
+            abiFilters += setOf("arm64-v8a", "x86_64")
+        }
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_static")
+                cppFlags += "-std=c++17"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -44,6 +67,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -58,7 +84,7 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
+        buildConfig = false
     }
 
     packaging {
@@ -69,8 +95,6 @@ android {
 }
 
 dependencies {
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.10.0")
-
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")

@@ -12,6 +12,7 @@ import com.example.chatapp.data.repository.ChatRepository
 import com.example.chatapp.data.repository.ContextWindowManager
 import com.example.chatapp.domain.usecase.SendMessageUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -50,7 +51,7 @@ class ChatViewModelTest {
         kotlinx.coroutines.Dispatchers.setMain(dispatcher)
         mockkStatic(Log::class)
         every { Log.e(any(), any(), any<Throwable>()) } returns 0
-        every { Log.w(any(), any()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
 
         sendMessageUseCase = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
@@ -58,7 +59,7 @@ class ChatViewModelTest {
         localMediaStore = mockk(relaxed = true)
         appPreferences = mockk(relaxed = true)
         contextWindowManager = ContextWindowManager()
-        messagesFlow = MutableStateFlow(emptyList())
+        messagesFlow = MutableStateFlow<List<ChatMessage>>(emptyList())
 
         every { appPreferences.selectedBackend } returns flowOf("GPU")
         every { appPreferences.temperature } returns flowOf(0.8f)
@@ -69,8 +70,6 @@ class ChatViewModelTest {
         coEvery { chatLocalStore.ensureConversation(any()) } returns 1L
         every { chatLocalStore.observeConversationSummaries() } returns flowOf(emptyList())
         every { chatLocalStore.observeConversationMessages(any()) } returns messagesFlow
-        coEvery { chatLocalStore.insertMessage(any(), any()) } returns Unit
-        coEvery { chatLocalStore.updateMessageContent(any(), any(), any()) } returns Unit
         every { chatRepository.isEngineReady() } returns true
     }
 
@@ -123,6 +122,9 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertEquals(false, viewModel.isGenerating.value)
+        assertEquals(null, viewModel.errorMessage.value)
+        verify { chatRepository.cancelGeneration() }
+        coVerify { chatLocalStore.deleteMessage(any()) }
     }
 
     @Test
@@ -162,6 +164,7 @@ class ChatViewModelTest {
             chatLocalStore = chatLocalStore,
             localMediaStore = localMediaStore,
             contextWindowManager = contextWindowManager,
-            appPreferences = appPreferences
+            appPreferences = appPreferences,
+            defaultDispatcher = dispatcher
         )
 }

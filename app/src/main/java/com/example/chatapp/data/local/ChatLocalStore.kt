@@ -77,57 +77,83 @@ class ChatLocalStore @Inject constructor(
 
     suspend fun insertMessage(conversationId: Long, message: ChatMessage) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
-        db.insertWithOnConflict(
-            TABLE_MESSAGES,
-            null,
-            ContentValues().apply {
-                put(COL_MESSAGE_ID, message.id)
-                put(COL_MESSAGE_CONVERSATION_ID, conversationId)
-                put(COL_MESSAGE_ROLE, message.role.name)
-                put(COL_MESSAGE_CONTENT, message.content)
-                put(COL_MESSAGE_TIMESTAMP, message.timestamp)
-                put(COL_MESSAGE_IS_STREAMING, if (message.isStreaming) 1 else 0)
-                put(COL_MESSAGE_TYPE, message.type.name)
-                put(COL_MESSAGE_MEDIA_URI, message.mediaUri)
-                put(COL_MESSAGE_MIME_TYPE, message.mimeType)
-                put(COL_MESSAGE_DURATION_MILLIS, message.durationMillis)
-            },
-            SQLiteDatabase.CONFLICT_REPLACE
-        )
-        upsertMessageSearchIndex(db, conversationId, message)
-        touchConversation(db, conversationId, message)
+        db.beginTransaction()
+        try {
+            db.insertWithOnConflict(
+                TABLE_MESSAGES,
+                null,
+                ContentValues().apply {
+                    put(COL_MESSAGE_ID, message.id)
+                    put(COL_MESSAGE_CONVERSATION_ID, conversationId)
+                    put(COL_MESSAGE_ROLE, message.role.name)
+                    put(COL_MESSAGE_CONTENT, message.content)
+                    put(COL_MESSAGE_TIMESTAMP, message.timestamp)
+                    put(COL_MESSAGE_IS_STREAMING, if (message.isStreaming) 1 else 0)
+                    put(COL_MESSAGE_TYPE, message.type.name)
+                    put(COL_MESSAGE_MEDIA_URI, message.mediaUri)
+                    put(COL_MESSAGE_MIME_TYPE, message.mimeType)
+                    put(COL_MESSAGE_DURATION_MILLIS, message.durationMillis)
+                },
+                SQLiteDatabase.CONFLICT_REPLACE
+            )
+            upsertMessageSearchIndex(db, conversationId, message)
+            touchConversation(db, conversationId, message)
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
         notifyChange()
     }
 
     suspend fun updateMessageContent(messageId: String, content: String, isStreaming: Boolean) =
         withContext(Dispatchers.IO) {
             val db = dbHelper.writableDatabase
-            db.update(
-                TABLE_MESSAGES,
-                ContentValues().apply {
+            db.beginTransaction()
+            try {
+                db.update(TABLE_MESSAGES, ContentValues().apply {
                     put(COL_MESSAGE_CONTENT, content)
                     put(COL_MESSAGE_IS_STREAMING, if (isStreaming) 1 else 0)
-                },
-                "$COL_MESSAGE_ID = ?",
-                arrayOf(messageId)
-            )
-            db.execSQL(
-                "UPDATE $TABLE_MESSAGES_FTS SET $COL_MESSAGE_CONTENT = ? WHERE $COL_MESSAGE_ID = ?",
-                arrayOf(content, messageId)
-            )
+                }, "$COL_MESSAGE_ID = ?", arrayOf(messageId))
+                db.execSQL("UPDATE $TABLE_MESSAGES_FTS SET $COL_MESSAGE_CONTENT = ? WHERE $COL_MESSAGE_ID = ?", arrayOf(content, messageId))
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
             notifyChange()
         }
 
+    suspend fun deleteMessage(messageId: String) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete(TABLE_MESSAGES, "$COL_MESSAGE_ID = ?", arrayOf(messageId))
+            db.delete(TABLE_MESSAGES_FTS, "$COL_MESSAGE_ID = ?", arrayOf(messageId))
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        notifyChange()
+    }
+
+    suspend fun loadCompleteTextTurns(conversationId: Long): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val messages = loadConversationMessages(conversationId).filter { it.type == MessageType.TEXT }
+        buildList {
+            var pendingUser: String? = null
+            messages.forEach { message ->
+                when (message.role) {
+                    MessageRole.USER -> pendingUser = message.content.takeIf { it.isNotBlank() }
+                    MessageRole.AI -> pendingUser?.let { user ->
+                        if (message.content.isNotBlank() && !message.isStreaming) add(user to message.content)
+                        pendingUser = null
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun finishAbandonedStreamingMessages() = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
-        db.update(
-            TABLE_MESSAGES,
-            ContentValues().apply {
-                put(COL_MESSAGE_IS_STREAMING, 0)
-            },
-            "$COL_MESSAGE_IS_STREAMING = ?",
-            arrayOf("1")
-        )
+        db.beginTransaction()
+        try {
+            db.delete(TABLE_MESSAGES_FTS, "$COL_MESSAGE_ID IN (SELECT $COL_MESSAGE_ID FROM $TABLE_MESSAGES WHERE $COL_MESSAGE_IS_STREAMING = 1 AND TRIM($COL_MESSAGE_CONTENT) = '')", null)
+            db.delete(TABLE_MESSAGES, "$COL_MESSAGE_IS_STREAMING = ? AND TRIM($COL_MESSAGE_CONTENT) = ?", arrayOf("1", ""))
+            db.update(TABLE_MESSAGES, ContentValues().apply { put(COL_MESSAGE_IS_STREAMING, 0) }, "$COL_MESSAGE_IS_STREAMING = ?", arrayOf("1"))
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
         notifyChange()
     }
 

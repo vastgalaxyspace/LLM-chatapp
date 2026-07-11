@@ -10,6 +10,8 @@ interface ChatRepository {
         attachments: List<MessageAttachment> = emptyList()
     ): Flow<String>
     suspend fun clearConversation()
+    suspend fun restoreConversation(turns: List<Pair<String, String>>)
+    fun cancelGeneration()
     suspend fun closeEngine()
     fun isEngineReady(): Boolean
 }

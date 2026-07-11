@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -22,7 +23,7 @@ class SecureTokenStore @Inject constructor(
     fun readHuggingFaceToken(): String? {
         val iv = preferences.getString(KEY_HF_TOKEN_IV, null) ?: return null
         val cipherText = preferences.getString(KEY_HF_TOKEN_VALUE, null) ?: return null
-        return runCatching {
+        return try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(
                 Cipher.DECRYPT_MODE,
@@ -30,7 +31,11 @@ class SecureTokenStore @Inject constructor(
                 GCMParameterSpec(GCM_TAG_BITS, Base64.decode(iv, Base64.NO_WRAP))
             )
             String(cipher.doFinal(Base64.decode(cipherText, Base64.NO_WRAP)), Charsets.UTF_8)
-        }.getOrNull()
+        } catch (error: Exception) {
+            Log.e(TAG, "Stored Hugging Face token could not be decrypted; clearing it", error)
+            clearHuggingFaceToken()
+            null
+        }
     }
 
     fun writeHuggingFaceToken(value: String) {
@@ -77,6 +82,7 @@ class SecureTokenStore @Inject constructor(
     }
 
     private companion object {
+        const val TAG = "SecureTokenStore"
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val KEY_ALIAS = "chatapp_hf_token_key"
         const val TRANSFORMATION = "AES/GCM/NoPadding"

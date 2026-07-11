@@ -21,8 +21,10 @@ import com.example.chatapp.ui.screens.download.DownloadViewModel
 import com.example.chatapp.ui.screens.onboarding.OnboardingScreen
 import com.example.chatapp.ui.screens.profile.ProfileScreen
 import com.example.chatapp.ui.screens.settings.SettingsScreen
+import com.example.chatapp.ui.screens.splash.SplashScreen
 
 private object Routes {
+    const val Splash = "splash"
     const val Onboarding = "onboarding"
     const val Download = "download"
     const val Loading = "loading"
@@ -46,6 +48,7 @@ fun AppNavigation() {
     val navController = rememberNavController()
     val appNavigationViewModel: AppNavigationViewModel = hiltViewModel()
     val hasCompletedOnboarding by appNavigationViewModel.hasCompletedOnboarding.collectAsStateWithLifecycle()
+    val isDarkTheme by appNavigationViewModel.isDarkTheme.collectAsStateWithLifecycle()
 
     LaunchedEffect(hasCompletedOnboarding) {
         if (hasCompletedOnboarding && navController.currentDestination?.route == Routes.Onboarding) {
@@ -58,8 +61,20 @@ fun AppNavigation() {
 
     NavHost(
         navController = navController,
-        startDestination = Routes.Onboarding
+        startDestination = Routes.Splash
     ) {
+        composable(Routes.Splash) {
+            SplashScreen(
+                onFinished = {
+                    val next = if (hasCompletedOnboarding) Routes.Download else Routes.Onboarding
+                    navController.navigate(next) {
+                        popUpTo(Routes.Splash) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
         composable(Routes.Onboarding) {
             OnboardingScreen(
                 onGetStarted = {
@@ -161,6 +176,8 @@ fun AppNavigation() {
         composable(Routes.Settings) {
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
+                isDarkTheme = isDarkTheme,
+                onSetDarkTheme = appNavigationViewModel::setDarkTheme,
                 onOpenModels = {
                     navController.navigateTopLevel(Routes.Download)
                 },

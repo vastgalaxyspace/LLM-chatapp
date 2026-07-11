@@ -201,7 +201,7 @@ fun DownloadScreen(
                             color = Color.White
                         )
                         Text(
-                            text = "${ModelCatalog.all.size} models available",
+                            text = "${viewModel.models().size} verified models available",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF888888)
                         )

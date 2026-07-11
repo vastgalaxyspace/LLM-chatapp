@@ -33,9 +33,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.chatapp.ui.theme.DarkBackground
 import com.example.chatapp.ui.theme.PrimaryGreen
 import com.example.chatapp.ui.theme.PrimaryGreenLight
+import com.example.chatapp.ui.theme.textHint
 
 @Composable
 fun ModelLoadingOverlay(modifier: Modifier = Modifier) {
@@ -53,7 +53,7 @@ fun ModelLoadingOverlay(modifier: Modifier = Modifier) {
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         val compact = maxWidth < 360.dp
         val maxContentWidth = if (maxWidth >= 900.dp) 760.dp else 620.dp
@@ -85,14 +85,14 @@ fun ModelLoadingOverlay(modifier: Modifier = Modifier) {
                 Text(
                     text = "InnoAI",
                     style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.ExtraBold
                 )
 
                 Text(
                     text = "On-device AI",
                     style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFF888888)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -119,18 +119,12 @@ fun ModelLoadingOverlay(modifier: Modifier = Modifier) {
                 Text(
                     text = "Powered by ",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF666666)
+                    color = MaterialTheme.colorScheme.textHint
                 )
-                Text("G", color = Color(0xFF4285F4), style = MaterialTheme.typography.bodyMedium)
-                Text("o", color = Color(0xFFEA4335), style = MaterialTheme.typography.bodyMedium)
-                Text("o", color = Color(0xFFFBBC05), style = MaterialTheme.typography.bodyMedium)
-                Text("g", color = Color(0xFF4285F4), style = MaterialTheme.typography.bodyMedium)
-                Text("l", color = Color(0xFF34A853), style = MaterialTheme.typography.bodyMedium)
-                Text("e", color = Color(0xFFEA4335), style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    text = "  LiteRT-LM",
+                    text = "llama.cpp",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF888888)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -144,11 +138,12 @@ private fun LoadingRing(
     modifier: Modifier,
     sweep: Float
 ) {
+    val trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
     Canvas(modifier = modifier) {
         val stroke = 6.dp.toPx()
         val inset = stroke / 2f
         drawArc(
-            color = Color(0xFF2A2A2A),
+            color = trackColor,
             startAngle = 0f,
             sweepAngle = 360f,
             useCenter = false,

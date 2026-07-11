@@ -32,9 +32,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.chatapp.ui.components.BrandMark
-import com.example.chatapp.ui.theme.DarkBackground
 import com.example.chatapp.ui.theme.PrimaryGreen
 import com.example.chatapp.ui.theme.PrimaryGreenLight
+import com.example.chatapp.ui.theme.isDark
+import com.example.chatapp.ui.theme.textHint
 
 @Composable
 fun OnboardingScreen(
@@ -43,7 +44,7 @@ fun OnboardingScreen(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         val compact = maxWidth < 360.dp
         val horizontalPad = if (compact) 18.dp else 28.dp
@@ -68,7 +69,10 @@ fun OnboardingScreen(
                 text = "InnoAI",
                 style = (if (compact) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge).copy(
                     brush = Brush.linearGradient(
-                        colors = listOf(Color.White, PrimaryGreenLight)
+                        colors = listOf(
+                            MaterialTheme.colorScheme.onBackground,
+                            if (MaterialTheme.colorScheme.isDark) PrimaryGreenLight else PrimaryGreen
+                        )
                     )
                 ),
                 fontWeight = FontWeight.ExtraBold,
@@ -80,7 +84,7 @@ fun OnboardingScreen(
             Text(
                 text = "Run private AI chat directly on your device - text, images, and audio notes stay local.",
                 style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
-                color = Color(0xFF888888),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
@@ -92,7 +96,7 @@ fun OnboardingScreen(
                 horizontalAlignment = Alignment.Start
             ) {
                 FeatureBullet("100% on-device processing", compact = compact)
-                FeatureBullet("LiteRT-LM powered local models", compact = compact)
+                FeatureBullet("llama.cpp powered local GGUF models", compact = compact)
                 FeatureBullet("No cloud connection needed", compact = compact)
                 FeatureBullet("Private and secure by default", compact = compact)
                 FeatureBullet("Works with CPU or supported GPU backend", compact = compact)
@@ -121,9 +125,9 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Offline-first with Google LiteRT",
+                text = "Offline-first with llama.cpp",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF555555)
+                color = MaterialTheme.colorScheme.textHint
             )
 
             Spacer(modifier = Modifier.height(if (compact) 20.dp else 28.dp))
@@ -153,7 +157,7 @@ private fun FeatureBullet(text: String, compact: Boolean) {
         Text(
             text = text,
             style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
-            color = Color(0xFFCCCCCC)
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

@@ -12,9 +12,10 @@
 #   public *;
 #}
 
-# LiteRT-LM
--keep class com.google.ai.edge.litertlm.** { *; }
--dontwarn com.google.ai.edge.litertlm.*
+# llama.cpp JNI bridge (native method names must survive shrinking)
+-keepclasseswithmembernames class com.example.chatapp.data.engine.LlamaBridge {
+    native <methods>;
+}
 
 # Hilt
 -keep class dagger.hilt.** { *; }

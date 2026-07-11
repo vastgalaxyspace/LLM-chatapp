@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.chatapp.ui.theme.PrimaryGreen
+import com.example.chatapp.ui.theme.bubbleAssistant
+import com.example.chatapp.ui.theme.textHint
 
 @Composable
 fun TypingIndicator() {
@@ -46,7 +48,7 @@ fun TypingIndicator() {
             Text(
                 text = "Thinking...",
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF666666)
+                color = MaterialTheme.colorScheme.textHint
             )
         }
 
@@ -54,7 +56,7 @@ fun TypingIndicator() {
             modifier = Modifier
                 .widthIn(max = 200.dp)
                 .background(
-                    color = Color(0xFF262626),
+                    color = MaterialTheme.colorScheme.bubbleAssistant,
                     shape = RoundedCornerShape(4.dp, 18.dp, 18.dp, 18.dp)
                 )
                 .padding(horizontal = 18.dp, vertical = 14.dp),

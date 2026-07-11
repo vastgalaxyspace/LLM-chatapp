@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import com.example.chatapp.R
 import com.example.chatapp.ui.theme.PrimaryGreen
 import com.example.chatapp.ui.theme.PrimaryGreenLight
+import com.example.chatapp.ui.theme.isDark
+import com.example.chatapp.ui.theme.textHint
 
 @Composable
 fun BrandLockup(
@@ -50,7 +52,10 @@ fun BrandLockup(
             text = title,
             style = (if (large) MaterialTheme.typography.displayLarge else MaterialTheme.typography.headlineMedium).copy(
                 brush = Brush.linearGradient(
-                    colors = listOf(Color.White, PrimaryGreenLight)
+                    colors = listOf(
+                        MaterialTheme.colorScheme.onBackground,
+                        if (MaterialTheme.colorScheme.isDark) PrimaryGreenLight else PrimaryGreen
+                    )
                 )
             ),
             fontWeight = FontWeight.ExtraBold
@@ -59,7 +64,7 @@ fun BrandLockup(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFF888888),
+                color = MaterialTheme.colorScheme.textHint,
                 textAlign = TextAlign.Center
             )
         }

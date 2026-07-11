@@ -16,6 +16,7 @@ import com.example.chatapp.domain.usecase.DownloadModelUseCase
 import com.example.chatapp.domain.usecase.DownloadState
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 
 @HiltWorker
 class ModelDownloadWorker @AssistedInject constructor(
@@ -32,18 +33,24 @@ class ModelDownloadWorker @AssistedInject constructor(
         setForeground(createForegroundInfo(modelId))
 
         var finalResult: Result = Result.failure()
-        downloadModelUseCase(modelId).collect { state ->
-            when (state) {
+        var lastProgressAt = 0L
+        try {
+            downloadModelUseCase(modelId).collect { state ->
+                when (state) {
                 is DownloadState.Downloading -> {
-                    setProgress(
-                        workDataOf(
-                            KEY_PROGRESS to state.progress,
-                            KEY_DOWNLOADED_MB to state.downloadedMB,
-                            KEY_TOTAL_MB to state.totalMB,
-                            KEY_SPEED_MBPS to state.speedMBps,
-                            KEY_ETA_SECONDS to (state.etaSeconds ?: -1L)
+                    val now = System.currentTimeMillis()
+                    if (now - lastProgressAt >= PROGRESS_INTERVAL_MS || state.progress >= 1f) {
+                        setProgress(
+                            workDataOf(
+                                KEY_PROGRESS to state.progress,
+                                KEY_DOWNLOADED_MB to state.downloadedMB,
+                                KEY_TOTAL_MB to state.totalMB,
+                                KEY_SPEED_MBPS to state.speedMBps,
+                                KEY_ETA_SECONDS to (state.etaSeconds ?: -1L)
+                            )
                         )
-                    )
+                        lastProgressAt = now
+                    }
                 }
                 is DownloadState.Complete -> {
                     appPreferences.updateSelectedModel(modelId)
@@ -53,7 +60,10 @@ class ModelDownloadWorker @AssistedInject constructor(
                 is DownloadState.Error -> {
                     finalResult = Result.failure(workDataOf(KEY_ERROR to state.message))
                 }
+                }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         }
         return finalResult
     }
@@ -61,22 +71,20 @@ class ModelDownloadWorker @AssistedInject constructor(
     private fun createForegroundInfo(modelId: String): ForegroundInfo {
         val channelId = "model_download"
         val notificationManager = applicationContext.getSystemService(NotificationManager::class.java)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            notificationManager.createNotificationChannel(
-                NotificationChannel(channelId, "Model Downloads", NotificationManager.IMPORTANCE_LOW)
-            )
-        }
+        notificationManager.createNotificationChannel(
+            NotificationChannel(channelId, "Model Downloads", NotificationManager.IMPORTANCE_LOW)
+        )
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setContentTitle("Downloading model")
             .setContentText(ModelCatalog.fromId(modelId).displayName)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setOngoing(true)
             .build()
-        return ForegroundInfo(
-            NOTIFICATION_ID,
-            notification,
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        )
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            ForegroundInfo(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(NOTIFICATION_ID, notification)
+        }
     }
 
     companion object {
@@ -88,5 +96,6 @@ class ModelDownloadWorker @AssistedInject constructor(
         const val KEY_ETA_SECONDS = "eta_seconds"
         const val KEY_ERROR = "error"
         private const val NOTIFICATION_ID = 1001
+        private const val PROGRESS_INTERVAL_MS = 500L
     }
 }

@@ -189,7 +189,7 @@ class SettingsViewModel @Inject constructor(
             }
             modelFileRepository.notifyChange()
             val modelsDir = File(context.filesDir, "models")
-            val fallbackModelId = ModelCatalog.all.firstOrNull {
+            val fallbackModelId = ModelCatalog.available.firstOrNull {
                 val file = File(modelsDir, it.fileName)
                 file.exists() && file.length() > 0L
             }?.id ?: ModelCatalog.QWEN_SMALL

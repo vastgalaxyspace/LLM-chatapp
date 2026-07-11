@@ -2,6 +2,8 @@ package com.example.chatapp.data.repository
 
 import android.content.Context
 import com.example.chatapp.data.model.ModelCatalog
+import com.example.chatapp.data.model.ModelValidationResult
+import com.example.chatapp.data.model.ModelValidator
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -37,7 +39,7 @@ class ModelFileRepository @Inject constructor(
     private fun scanDownloadedModelIds(): Set<String> {
         val modelsDir = File(context.filesDir, "models")
         return ModelCatalog.all
-            .filter { File(modelsDir, it.fileName).exists() && File(modelsDir, it.fileName).length() > 0L }
+            .filter { ModelValidator.validate(File(modelsDir, it.fileName), it) is ModelValidationResult.Valid }
             .map { it.id }
             .toSet()
     }

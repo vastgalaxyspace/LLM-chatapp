@@ -1,6 +1,6 @@
 package com.example.chatapp.data.repository
 
-import com.google.ai.edge.litertlm.Message
+import com.example.chatapp.data.model.EngineMessage
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,8 +21,8 @@ class ContextWindowManager @Inject constructor() {
     fun retainedTurns(): List<Pair<String, String>> = retainedTurns.toList()
 
     @Synchronized
-    fun retainedMessages(): List<Message> = retainedTurns.flatMap { (userTurn, assistantTurn) ->
-        listOf(Message.user(userTurn), Message.model(assistantTurn))
+    fun retainedMessages(): List<EngineMessage> = retainedTurns.flatMap { (userTurn, assistantTurn) ->
+        listOf(EngineMessage.user(userTurn), EngineMessage.model(assistantTurn))
     }
 
     @Synchronized
@@ -46,6 +46,14 @@ class ContextWindowManager @Inject constructor() {
     }
 
     @Synchronized
+    fun replaceTurns(turns: List<Pair<String, String>>, maxNumTokens: Int) {
+        retainedTurns.clear()
+        retainedTurns.addAll(turns)
+        trimToBudget(maxNumTokens)
+        publish(maxNumTokens)
+    }
+
+    @Synchronized
     fun refresh(maxNumTokens: Int) {
         trimToBudget(maxNumTokens)
         publish(maxNumTokens)
@@ -55,7 +63,8 @@ class ContextWindowManager @Inject constructor() {
         if (maxNumTokens <= 0) return
 
         // Ensure we always leave room for the system prompt and a new user message
-        val usableBudget = (maxNumTokens * RETAINED_CONTEXT_BUDGET).toInt() - SYSTEM_PROMPT_RESERVE
+        val reserve = SYSTEM_PROMPT_RESERVE.coerceAtMost((maxNumTokens * SYSTEM_PROMPT_RESERVE_RATIO).toInt())
+        val usableBudget = ((maxNumTokens * RETAINED_CONTEXT_BUDGET).toInt() - reserve).coerceAtLeast(1)
 
         // Remove oldest turns until we are within budget
         // We always keep the most recent turn if possible
@@ -79,7 +88,7 @@ class ContextWindowManager @Inject constructor() {
         turns.sumOf { (user, assistant) -> estimateTokens(user) + estimateTokens(assistant) }
 
     /**
-     * More conservative estimation for LiteRT-LM models.
+     * More conservative estimation for on-device GGUF models.
      * 2.5 chars per token is safer for models that use rich tokenizers (Gemma/Qwen).
      */
     private fun estimateTokens(text: String): Int {
@@ -89,10 +98,11 @@ class ContextWindowManager @Inject constructor() {
 
     private companion object {
         // Updated for safety: Gemma/Qwen typically average 2.5 - 3 chars per token
-        const val CHARS_PER_TOKEN_SAFE = 2.5f
+        const val CHARS_PER_TOKEN_SAFE = 3f
 
         // Reserve tokens for the internal system prompt and metadata tags
         const val SYSTEM_PROMPT_RESERVE = 150
+        const val SYSTEM_PROMPT_RESERVE_RATIO = 0.20f
 
         // Percentage of context to keep after trimming
         const val RETAINED_CONTEXT_BUDGET = 0.80f
