@@ -18,17 +18,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
@@ -59,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.ui.theme.ErrorRed
 import com.example.chatapp.ui.theme.PrimaryGreen
+import com.example.chatapp.ui.components.AppLogo
 import com.example.chatapp.ui.theme.subtleBorder
 import com.example.chatapp.ui.theme.textHint
 import java.util.Locale
@@ -68,8 +65,8 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenModels: (() -> Unit)? = null,
     onOpenChat: (() -> Unit)? = null,
-    isDarkTheme: Boolean = true,
-    onSetDarkTheme: (Boolean) -> Unit = {},
+    @Suppress("UNUSED_PARAMETER") isDarkTheme: Boolean = true,
+    @Suppress("UNUSED_PARAMETER") onSetDarkTheme: (Boolean) -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val selectedBackend by viewModel.selectedBackend.collectAsStateWithLifecycle()
@@ -110,16 +107,6 @@ fun SettingsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = horizontalPad, vertical = 12.dp)
                 ) {
-            // APPEARANCE section
-            SectionLabel("APPEARANCE")
-            SettingsCard {
-                Text("Theme", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.height(10.dp))
-                ThemeSelector(isDarkTheme = isDarkTheme, onSetDarkTheme = onSetDarkTheme)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // MODEL section
             SectionLabel("MODEL")
             SettingsCard {
@@ -340,63 +327,6 @@ private fun ExportAction(
 }
 
 @Composable
-private fun ThemeSelector(isDarkTheme: Boolean, onSetDarkTheme: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
-            .padding(3.dp)
-    ) {
-        ThemeOption(
-            label = "Light",
-            icon = Icons.Rounded.LightMode,
-            selected = !isDarkTheme,
-            modifier = Modifier.weight(1f)
-        ) { onSetDarkTheme(false) }
-        ThemeOption(
-            label = "Dark",
-            icon = Icons.Rounded.DarkMode,
-            selected = isDarkTheme,
-            modifier = Modifier.weight(1f)
-        ) { onSetDarkTheme(true) }
-    }
-}
-
-@Composable
-private fun ThemeOption(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) PrimaryGreen else Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier.padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                label,
-                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelLarge
-            )
-        }
-    }
-}
-
-@Composable
 private fun SettingsTopBar(onNavigateBack: () -> Unit) {
     Row(
         modifier = Modifier
@@ -442,7 +372,7 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface
     ) {
-        Column(modifier = Modifier.padding(16.dp), content = content)
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp), content = content)
     }
 }
 
@@ -452,10 +382,10 @@ private fun ModelHeader(name: String, sizeLabel: String) {
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .background(PrimaryGreen.copy(alpha = 0.12f), CircleShape),
+                .background(PrimaryGreen.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = PrimaryGreen, modifier = Modifier.size(22.dp))
+            AppLogo(modifier = Modifier.size(24.dp), contentDescription = null)
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(
@@ -510,35 +440,46 @@ private fun ModelSelector(selectedModel: String, onSelect: (String) -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ModelCatalog.available.forEach { model ->
-                Surface(
-                    modifier = Modifier
-                        .clickable { onSelect(model.id) },
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (selectedModel == model.id) PrimaryGreen else MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val columnCount = if (maxWidth < 520.dp) 1 else 2
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ModelCatalog.available.chunked(columnCount).forEach { models ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            model.displayName,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (selectedModel == model.id) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                        Text(
-                            model.sizeLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (selectedModel == model.id) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.textHint
-                        )
+                        models.forEach { model ->
+                            Surface(
+                                modifier = Modifier.weight(1f).clickable { onSelect(model.id) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (selectedModel == model.id) PrimaryGreen else MaterialTheme.colorScheme.surfaceVariant,
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        model.displayName,
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (selectedModel == model.id) Color(0xFF171006) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(7.dp),
+                                        color = if (selectedModel == model.id) Color.Black.copy(alpha = 0.08f) else PrimaryGreen.copy(alpha = 0.09f),
+                                    ) {
+                                        Text(
+                                            model.sizeLabel,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (selectedModel == model.id) Color(0xFF171006).copy(alpha = 0.72f) else PrimaryGreen,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        repeat(columnCount - models.size) { Spacer(modifier = Modifier.weight(1f)) }
                     }
                 }
             }
@@ -565,7 +506,7 @@ private fun SegmentedSelector(options: List<String>, selected: String, onSelect:
                 Box(modifier = Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                     Text(
                         option,
-                        color = if (option == selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (option == selected) Color(0xFF171006) else MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelLarge
                     )
                 }

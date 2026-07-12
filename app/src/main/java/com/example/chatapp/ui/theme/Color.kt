@@ -2,44 +2,43 @@ package com.example.chatapp.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary green accent
-val PrimaryGreen = Color(0xFF10B981)
-val PrimaryGreenLight = Color(0xFF34D399)
-val PrimaryGreenDark = Color(0xFF059669)
+val SignalAmber = Color(0xFFF7B936)
+val SignalAmberBright = Color(0xFFFFC447)
+val SignalAmberDark = Color(0xFFD89718)
+val TrueBlack = Color(0xFF050505)
+val InkBlack = Color(0xFF090909)
+val InstrumentSurface = Color(0xFF111113)
+val InstrumentSurfaceHigh = Color(0xFF18181B)
+val InstrumentBorder = Color(0xFF26262A)
+val InstrumentText = Color(0xFFF1F0ED)
+val InstrumentMuted = Color(0xFF8B8983)
+val InstrumentFaint = Color(0xFF575650)
 
-// Dark surfaces
-val DarkBackground = Color(0xFF09090B)
-val DarkSurface = Color(0xFF18181B)
-val DarkSurfaceVariant = Color(0xFF27272A)
-val DarkSurfaceElevated = Color(0xFF3F3F46)
-val DarkSurfaceCard = Color(0xFF111113)
-
-// Text colors
-val OnDarkPrimary = Color(0xFFFFFFFF)
-val OnDarkSecondary = Color(0xFFD4D4D8)
-val OnDarkTertiary = Color(0xFFA1A1AA)
-val OnDarkHint = Color(0xFF71717A)
-
-// Chat bubbles
-val UserBubbleGreen = Color(0xFF059669)
-val AiBubbleDark = Color(0xFF18181B)
-
-// Accent colors
-val AccentTeal = Color(0xFF14B8A6)
-val AccentOrange = Color(0xFFF97316)
-val AccentBlue = Color(0xFF3B82F6)
-
-// Status
-val ErrorRed = Color(0xFFEF4444)
-val SuccessGreen = Color(0xFF10B981)
-val WarningAmber = Color(0xFFF59E0B)
-
-// Light theme
-val LightBackground = Color(0xFFF7F8FA)
-val LightSurface = Color(0xFFFFFFFF)
-val LightSurfaceVariant = Color(0xFFEEF0F3)
-val LightSurfaceElevated = Color(0xFFE4E7EB)
-val LightOnSurface = Color(0xFF0F172A)
-val LightOnSurfaceSecondary = Color(0xFF475569)
-val LightOnSurfaceHint = Color(0xFF64748B)
-val LightOutline = Color(0xFFE2E8F0)
+val PrimaryGreen = SignalAmber
+val PrimaryGreenLight = SignalAmberBright
+val PrimaryGreenDark = SignalAmberDark
+val DarkBackground = TrueBlack
+val DarkSurface = InstrumentSurfaceHigh
+val DarkSurfaceVariant = InstrumentBorder
+val DarkSurfaceElevated = Color(0xFF202024)
+val DarkSurfaceCard = InstrumentSurface
+val OnDarkPrimary = InstrumentText
+val OnDarkSecondary = Color(0xFFC7C5BF)
+val OnDarkTertiary = InstrumentMuted
+val OnDarkHint = InstrumentFaint
+val UserBubbleGreen = SignalAmber
+val AiBubbleDark = TrueBlack
+val AccentTeal = SignalAmber
+val AccentOrange = SignalAmberBright
+val AccentBlue = SignalAmberDark
+val ErrorRed = Color(0xFFED6A6A)
+val SuccessGreen = SignalAmber
+val WarningAmber = SignalAmberBright
+val LightBackground = TrueBlack
+val LightSurface = InstrumentSurface
+val LightSurfaceVariant = InstrumentSurfaceHigh
+val LightSurfaceElevated = DarkSurfaceElevated
+val LightOnSurface = InstrumentText
+val LightOnSurfaceSecondary = OnDarkSecondary
+val LightOnSurfaceHint = InstrumentMuted
+val LightOutline = InstrumentBorder

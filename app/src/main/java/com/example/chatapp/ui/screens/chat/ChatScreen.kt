@@ -34,6 +34,7 @@ import com.example.chatapp.data.local.ConversationSummary
 import com.example.chatapp.data.model.MessageRole
 import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.ui.components.BrandLockup
+import com.example.chatapp.ui.components.AppLogo
 import com.example.chatapp.ui.components.ChatBubble
 import com.example.chatapp.ui.components.MessageInput
 import com.example.chatapp.ui.components.TypingIndicator
@@ -72,6 +73,7 @@ fun ChatScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var hasProcessedInitialPrompt by remember { mutableStateOf(false) }
+    var suggestedPrompt by remember { mutableStateOf<String?>(null) }
 
     val isAtBottom by remember {
         derivedStateOf {
@@ -142,6 +144,8 @@ fun ChatScreen(
                     isLoading = isLoading,
                     tokensPerSec = generationTokensPerSecond,
                     ttft = timeToFirstTokenMillis,
+                    suggestedText = suggestedPrompt,
+                    onSuggestionConsumed = { suggestedPrompt = null },
                     onSend = {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         viewModel.sendMessage(it)
@@ -152,7 +156,11 @@ fun ChatScreen(
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
                 if (messages.isEmpty()) {
-                    EmptyChatState(modifier = Modifier.fillMaxSize(), compact = false)
+                    EmptyChatState(
+                        modifier = Modifier.fillMaxSize(),
+                        compact = false,
+                        onSuggestionClick = { suggestedPrompt = it },
+                    )
                 } else {
                     LazyColumn(
                         state = listState,
@@ -195,6 +203,8 @@ private fun ChatBottomInputArea(
     isLoading: Boolean,
     tokensPerSec: Float?,
     ttft: Long?,
+    suggestedText: String?,
+    onSuggestionConsumed: () -> Unit,
     onSend: (String) -> Unit,
     onStop: () -> Unit
 ) {
@@ -221,6 +231,8 @@ private fun ChatBottomInputArea(
             MessageInput(
                 isGenerating = isGenerating,
                 enabled = !isLoading,
+                suggestedText = suggestedText,
+                onSuggestionConsumed = onSuggestionConsumed,
                 onSend = onSend,
                 onStop = onStop
             )
@@ -244,7 +256,7 @@ private fun ChatTopBar(
     ) {
         Column {
             Row(
-                Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp),
+                Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onOpenHistory) {
@@ -252,8 +264,8 @@ private fun ChatTopBar(
                 }
 
                 Row(Modifier.weight(1f).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(32.dp).background(PrimaryGreen.copy(0.1f), CircleShape).border(1.dp, PrimaryGreen.copy(0.2f), CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Hub, null, tint = PrimaryGreen, modifier = Modifier.size(18.dp))
+                    Box(Modifier.size(32.dp).background(PrimaryGreen.copy(0.12f), RoundedCornerShape(9.dp)).border(1.dp, PrimaryGreen.copy(0.28f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+                        AppLogo(modifier = Modifier.size(20.dp), contentDescription = null)
                     }
                     Column(Modifier.padding(start = 12.dp)) {
                         Text("InnoAI", style = MaterialTheme.typography.titleMedium, color = colors.onSurface, fontWeight = FontWeight.Bold)
@@ -316,7 +328,10 @@ private fun ChatHistoryDrawer(
         Text("Recent History", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             items(historyItems) { item ->
                 val isSelected = item.id == activeConversationId
                 Surface(
@@ -337,6 +352,20 @@ private fun ChatHistoryDrawer(
                 }
             }
         }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(30.dp).background(PrimaryGreen.copy(alpha = 0.14f), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("I", color = PrimaryGreen, style = MaterialTheme.typography.labelLarge)
+            }
+            Text("InnoAI User", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 
     if (renamingItem != null) {
@@ -350,13 +379,17 @@ private fun ChatHistoryDrawer(
 }
 
 @Composable
-private fun EmptyChatState(modifier: Modifier, compact: Boolean) {
+private fun EmptyChatState(
+    modifier: Modifier,
+    compact: Boolean,
+    onSuggestionClick: (String) -> Unit,
+) {
     Column(modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         BrandLockup(title = "InnoAI", subtitle = "Your Private Offline Assistant", large = !compact)
         Spacer(Modifier.height(32.dp))
         Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SuggestionChip(label = "Explain Quantum Physics", onClick = {})
-            SuggestionChip(label = "Write Kotlin code", onClick = {})
+            SuggestionChip(label = "Explain Quantum Physics", onClick = { onSuggestionClick("Explain Quantum Physics") })
+            SuggestionChip(label = "Write Kotlin code", onClick = { onSuggestionClick("Write Kotlin code") })
         }
     }
 }

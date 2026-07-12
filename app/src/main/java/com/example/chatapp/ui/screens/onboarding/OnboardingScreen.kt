@@ -63,7 +63,16 @@ fun OnboardingScreen(
 
             BrandMark(large = !compact)
 
-            Spacer(modifier = Modifier.height(if (compact) 16.dp else 28.dp))
+            Spacer(modifier = Modifier.height(if (compact) 12.dp else 18.dp))
+
+            Text(
+                text = "ON-DEVICE  •  OFFLINE",
+                style = MaterialTheme.typography.labelSmall,
+                color = PrimaryGreen,
+                textAlign = TextAlign.Center,
+            )
+
+            Spacer(modifier = Modifier.height(if (compact) 12.dp else 18.dp))
 
             Text(
                 text = "InnoAI",
@@ -82,7 +91,7 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(if (compact) 8.dp else 10.dp))
 
             Text(
-                text = "Run private AI chat directly on your device - text, images, and audio notes stay local.",
+                text = "Run private AI chat directly on your device. Text stays local — no cloud, no account.",
                 style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -96,10 +105,9 @@ fun OnboardingScreen(
                 horizontalAlignment = Alignment.Start
             ) {
                 FeatureBullet("100% on-device processing", compact = compact)
-                FeatureBullet("llama.cpp powered local GGUF models", compact = compact)
+                FeatureBullet("llama.cpp powered GGUF models", compact = compact)
                 FeatureBullet("No cloud connection needed", compact = compact)
-                FeatureBullet("Private and secure by default", compact = compact)
-                FeatureBullet("Works with CPU or supported GPU backend", compact = compact)
+                FeatureBullet("Private & secure by default", compact = compact)
             }
 
             Spacer(modifier = Modifier.height(if (compact) 22.dp else 30.dp))
@@ -116,7 +124,7 @@ fun OnboardingScreen(
                 )
             ) {
                 Text(
-                    text = "Get Started",
+                    text = "Get Started  →",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )

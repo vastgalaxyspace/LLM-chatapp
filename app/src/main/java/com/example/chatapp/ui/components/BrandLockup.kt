@@ -15,15 +15,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -31,8 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.chatapp.R
 import com.example.chatapp.ui.theme.PrimaryGreen
-import com.example.chatapp.ui.theme.PrimaryGreenLight
-import com.example.chatapp.ui.theme.isDark
+import com.example.chatapp.ui.theme.SignalAmberBright
 import com.example.chatapp.ui.theme.textHint
 
 @Composable
@@ -50,20 +50,14 @@ fun BrandLockup(
         BrandMark(large = large)
         Text(
             text = title,
-            style = (if (large) MaterialTheme.typography.displayLarge else MaterialTheme.typography.headlineMedium).copy(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.onBackground,
-                        if (MaterialTheme.colorScheme.isDark) PrimaryGreenLight else PrimaryGreen
-                    )
-                )
-            ),
+            style = if (large) MaterialTheme.typography.displayLarge else MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.ExtraBold
         )
         if (subtitle != null) {
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.textHint,
                 textAlign = TextAlign.Center
             )
@@ -72,13 +66,29 @@ fun BrandLockup(
 }
 
 @Composable
+fun AppLogo(
+    modifier: Modifier = Modifier,
+    contentDescription: String? = "InnoAI logo",
+) {
+    Image(
+        painter = painterResource(id = R.drawable.innoailogomain),
+        contentDescription = contentDescription,
+        modifier = modifier,
+        contentScale = ContentScale.Fit,
+        colorFilter = ColorFilter.tint(PrimaryGreen),
+    )
+}
+
+@Composable
 fun BrandMark(
     modifier: Modifier = Modifier,
     large: Boolean = true
 ) {
-    val outerSize = if (large) 110.dp else 48.dp
-    val innerSize = if (large) 72.dp else 32.dp
+    val outerSize = if (large) 112.dp else 48.dp
+    val innerSize = if (large) 72.dp else 34.dp
     val iconSize = if (large) 36.dp else 18.dp
+    val outerShape = RoundedCornerShape(if (large) 28.dp else 12.dp)
+    val innerShape = RoundedCornerShape(if (large) 22.dp else 10.dp)
 
     // Subtle breathing glow animation
     val transition = rememberInfiniteTransition(label = "brand_glow")
@@ -98,25 +108,17 @@ fun BrandMark(
             .background(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        PrimaryGreen.copy(alpha = glowAlpha * 0.4f),
-                        PrimaryGreen.copy(alpha = 0.05f),
+                        PrimaryGreen.copy(alpha = glowAlpha * 0.7f),
+                        PrimaryGreen.copy(alpha = 0.06f),
                         Color.Transparent
                     )
                 ),
-                shape = CircleShape
+                shape = outerShape
             )
             .border(
                 1.5.dp,
-                Brush.sweepGradient(
-                    colors = listOf(
-                        PrimaryGreen.copy(alpha = glowAlpha),
-                        PrimaryGreen.copy(alpha = 0.1f),
-                        PrimaryGreen.copy(alpha = glowAlpha * 0.7f),
-                        PrimaryGreen.copy(alpha = 0.1f),
-                        PrimaryGreen.copy(alpha = glowAlpha)
-                    )
-                ),
-                CircleShape
+                PrimaryGreen.copy(alpha = glowAlpha),
+                outerShape
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -126,21 +128,18 @@ fun BrandMark(
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            PrimaryGreen.copy(alpha = 0.2f),
-                            PrimaryGreen.copy(alpha = 0.08f)
+                            SignalAmberBright.copy(alpha = 0.22f),
+                            PrimaryGreen.copy(alpha = 0.09f)
                         )
                     ),
-                    shape = CircleShape
+                    shape = innerShape
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.innoailogomain),
-                contentDescription = "App logo",
+            AppLogo(
                 modifier = Modifier
                     .size(iconSize + 8.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                    .padding(2.dp),
             )
         }
     }
@@ -171,7 +170,7 @@ fun StatusEyebrow(
         )
         Text(
             text = text,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             color = PrimaryGreen
         )
     }

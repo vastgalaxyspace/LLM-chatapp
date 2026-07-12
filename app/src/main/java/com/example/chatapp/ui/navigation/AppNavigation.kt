@@ -18,19 +18,19 @@ import com.example.chatapp.ui.screens.chat.ChatScreen
 import com.example.chatapp.ui.screens.chat.ChatViewModel
 import com.example.chatapp.ui.screens.download.DownloadScreen
 import com.example.chatapp.ui.screens.download.DownloadViewModel
+import com.example.chatapp.ui.screens.guide.GuideScreen
 import com.example.chatapp.ui.screens.onboarding.OnboardingScreen
 import com.example.chatapp.ui.screens.profile.ProfileScreen
 import com.example.chatapp.ui.screens.settings.SettingsScreen
-import com.example.chatapp.ui.screens.splash.SplashScreen
 
 private object Routes {
-    const val Splash = "splash"
     const val Onboarding = "onboarding"
     const val Download = "download"
     const val Loading = "loading"
     const val Chat = "chat"
     const val Settings = "settings"
     const val Profile = "profile"
+    const val Guide = "guide"
 }
 
 private fun NavHostController.navigateTopLevel(route: String) {
@@ -61,20 +61,8 @@ fun AppNavigation() {
 
     NavHost(
         navController = navController,
-        startDestination = Routes.Splash
+        startDestination = Routes.Onboarding
     ) {
-        composable(Routes.Splash) {
-            SplashScreen(
-                onFinished = {
-                    val next = if (hasCompletedOnboarding) Routes.Download else Routes.Onboarding
-                    navController.navigate(next) {
-                        popUpTo(Routes.Splash) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                }
-            )
-        }
-
         composable(Routes.Onboarding) {
             OnboardingScreen(
                 onGetStarted = {
@@ -194,8 +182,15 @@ fun AppNavigation() {
                 },
                 onModelsClick = {
                     navController.navigateTopLevel(Routes.Download)
-                }
+                },
+                onGuideClick = {
+                    navController.navigate(Routes.Guide) { launchSingleTop = true }
+                },
             )
+        }
+
+        composable(Routes.Guide) {
+            GuideScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }

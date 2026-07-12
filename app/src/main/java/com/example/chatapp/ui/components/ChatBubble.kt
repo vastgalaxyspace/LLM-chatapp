@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image as ImageIcon
 import androidx.compose.material.icons.rounded.Refresh
@@ -59,6 +58,7 @@ import com.example.chatapp.data.model.MessageRole
 import com.example.chatapp.data.model.MessageType
 import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.ui.theme.PrimaryGreen
+import com.example.chatapp.ui.theme.PlexMono
 import com.example.chatapp.ui.theme.bubbleAssistant
 import com.example.chatapp.ui.theme.isDark
 import com.example.chatapp.ui.theme.textHint
@@ -92,8 +92,7 @@ fun ChatBubble(
     )
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        // Responsive max width: 85% of screen, clamped to min 220 and max 600
-        val adaptiveMaxBubble = (maxWidth * 0.85f).coerceIn(220.dp, 600.dp)
+        val adaptiveMaxBubble = (maxWidth * 0.82f).coerceIn(220.dp, 600.dp)
 
         Column(
             modifier = Modifier
@@ -117,18 +116,13 @@ fun ChatBubble(
                     Box(
                         modifier = Modifier
                             .size(22.dp)
-                            .background(PrimaryGreen.copy(alpha = 0.15f), CircleShape),
+                            .background(PrimaryGreen.copy(alpha = 0.15f), RoundedCornerShape(7.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Hub,
-                            contentDescription = null,
-                            tint = PrimaryGreen,
-                            modifier = Modifier.size(12.dp)
-                        )
+                        AppLogo(modifier = Modifier.size(14.dp), contentDescription = null)
                     }
                     Text(
-                        text = if (message.isStreaming) "Generating..." else "InnoAI",
+                        text = if (message.isStreaming) "INNOAI  •  GENERATING" else "INNOAI  •  ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp))}",
                         style = MaterialTheme.typography.labelMedium,
                         color = if (message.isStreaming) PrimaryGreen.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = if (message.isStreaming) FontWeight.Medium else FontWeight.Normal
@@ -138,30 +132,30 @@ fun ChatBubble(
 
             Column(
                 modifier = Modifier
-                    .widthIn(max = adaptiveMaxBubble)
+                    .then(if (isUser) Modifier.widthIn(max = adaptiveMaxBubble) else Modifier.fillMaxWidth())
                     .background(
                         brush = if (isUser) {
                             Brush.linearGradient(
                                 colors = listOf(
                                     PrimaryGreen,
-                                    PrimaryGreen.copy(alpha = 0.88f)
+                                    PrimaryGreen.copy(alpha = 0.92f)
                                 )
                             )
                         } else {
                             Brush.linearGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.bubbleAssistant,
-                                    MaterialTheme.colorScheme.bubbleAssistant
+                                    Color.Transparent,
+                                    Color.Transparent
                                 )
                             )
                         },
                         shape = if (isUser) {
-                            RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
+                            RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)
                         } else {
-                            RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp)
+                            RoundedCornerShape(0.dp)
                         }
                     )
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .padding(horizontal = if (isUser) 14.dp else 0.dp, vertical = if (isUser) 12.dp else 4.dp)
             ) {
                 when (message.type) {
                     MessageType.IMAGE -> ImageMessageContent(message)
@@ -243,7 +237,7 @@ fun ChatBubble(
 private fun MarkdownMessageText(text: String, isUser: Boolean = false) {
     val blocks = remember(text) { splitMarkdownBlocks(text) }
     val darkContext = isUser || MaterialTheme.colorScheme.isDark
-    val bodyColor = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
+    val bodyColor = if (isUser) Color(0xFF171006) else MaterialTheme.colorScheme.onSurface
     val codeBackground = if (darkContext) Color.Black.copy(alpha = 0.28f) else Color(0xFFF1F5F9)
     val codeColor = if (darkContext) Color(0xFFEAEAEA) else Color(0xFF334155)
 
@@ -258,8 +252,8 @@ private fun MarkdownMessageText(text: String, isUser: Boolean = false) {
                     Text(
                         text = block.text,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                        color = codeColor
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = PlexMono),
+                        color = PrimaryGreen
                     )
                 }
             } else {

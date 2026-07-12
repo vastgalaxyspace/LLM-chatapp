@@ -2,6 +2,7 @@ package com.example.chatapp.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,6 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +46,7 @@ import com.example.chatapp.ui.theme.PrimaryGreen
 fun ProfileScreen(
     onChatClick: (() -> Unit)? = null,
     onModelsClick: (() -> Unit)? = null,
+    onGuideClick: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val profileStats = viewModel.stats.collectAsStateWithLifecycle()
@@ -173,6 +179,34 @@ fun ProfileScreen(
                     ProfileMetricRow("User messages", "${profileStats.value.userMessages}")
                     ProfileMetricRow("AI messages", "${profileStats.value.aiMessages}")
                     ProfileMetricRow("Conversations", "${profileStats.value.conversations}")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(16.dp))
+                    .clickable(enabled = onGuideClick != null) { onGuideClick?.invoke() },
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier.size(42.dp).background(PrimaryGreen.copy(alpha = 0.13f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Rounded.MenuBook, contentDescription = null, tint = PrimaryGreen)
+                    }
+                    Column(modifier = Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                        Text("App guide", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("Learn models, chat, and privacy", style = MaterialTheme.typography.bodySmall, color = Color(0xFF888888))
+                    }
+                    Icon(Icons.Rounded.ChevronRight, contentDescription = "Open guide", tint = PrimaryGreen)
                 }
             }
 

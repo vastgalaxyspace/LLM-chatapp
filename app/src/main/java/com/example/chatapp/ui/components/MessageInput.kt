@@ -27,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +38,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import com.example.chatapp.ui.theme.ErrorRed
 import com.example.chatapp.ui.theme.PrimaryGreen
 import com.example.chatapp.ui.theme.chipBackground
 import com.example.chatapp.ui.theme.isDark
@@ -49,11 +49,20 @@ fun MessageInput(
     modifier: Modifier = Modifier,
     isGenerating: Boolean,
     enabled: Boolean,
+    suggestedText: String? = null,
+    onSuggestionConsumed: () -> Unit = {},
     onSend: (String) -> Unit,
     onStop: () -> Unit
 ) {
     var text by remember { mutableStateOf(TextFieldValue("")) }
     val colors = MaterialTheme.colorScheme
+
+    LaunchedEffect(suggestedText) {
+        suggestedText?.let {
+            text = TextFieldValue(it)
+            onSuggestionConsumed()
+        }
+    }
 
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth()
@@ -69,7 +78,7 @@ fun MessageInput(
 
         val sendButtonColor by animateColorAsState(
             targetValue = when {
-                isGenerating -> ErrorRed
+                isGenerating -> PrimaryGreen
                 canSend -> PrimaryGreen
                 else -> colors.chipBackground
             },
@@ -78,7 +87,7 @@ fun MessageInput(
         )
 
         val sendIconColor = when {
-            isGenerating || canSend -> androidx.compose.ui.graphics.Color.White
+            isGenerating || canSend -> androidx.compose.ui.graphics.Color(0xFF171006)
             else -> colors.textHint
         }
 

@@ -2,7 +2,6 @@ package com.example.chatapp.ui.screens.download
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,7 +24,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -53,8 +51,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
@@ -64,7 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.model.ModelOption
 import com.example.chatapp.domain.usecase.DownloadState
-import com.example.chatapp.R
+import com.example.chatapp.ui.components.AppLogo
 import com.example.chatapp.ui.components.DockTab
 import com.example.chatapp.ui.components.FloatingBottomDock
 import com.example.chatapp.ui.theme.DarkBackground
@@ -183,15 +179,10 @@ fun DownloadScreen(
                     Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .background(PrimaryGreen.copy(alpha = 0.12f), CircleShape),
+                            .background(PrimaryGreen.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.innoailogomain),
-                            contentDescription = "App logo",
-                            modifier = Modifier.size(24.dp),
-                            contentScale = ContentScale.Fit
-                        )
+                        AppLogo(modifier = Modifier.size(27.dp))
                     }
                     Column {
                         Text(
@@ -295,7 +286,7 @@ private fun FamilyChip(
             text = label,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             style = MaterialTheme.typography.labelMedium,
-            color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (selected) Color(0xFF171006) else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -653,7 +644,7 @@ private fun ModelCard(
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isDownloaded) PrimaryGreen else Color(0xFF2A2A2A),
-                    contentColor = Color.White,
+                    contentColor = Color(0xFF171006),
                     disabledContainerColor = Color(0xFF2A2A2A).copy(alpha = 0.5f),
                     disabledContentColor = Color.White.copy(alpha = 0.5f)
                 )

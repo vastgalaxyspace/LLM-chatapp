@@ -83,7 +83,7 @@ fun FloatingBottomDock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding(),
-                color = MaterialTheme.colorScheme.surface
+                color = MaterialTheme.colorScheme.background
             ) {
                 Row(
                     modifier = Modifier
