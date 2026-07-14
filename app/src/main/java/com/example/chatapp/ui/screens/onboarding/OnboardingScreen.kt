@@ -22,8 +22,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -39,8 +45,9 @@ import com.example.chatapp.ui.theme.textHint
 
 @Composable
 fun OnboardingScreen(
-    onGetStarted: () -> Unit
+    onGetStarted: (String) -> Unit
 ) {
+    var name by remember { mutableStateOf("") }
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -110,17 +117,46 @@ fun OnboardingScreen(
                 FeatureBullet("Private & secure by default", compact = compact)
             }
 
-            Spacer(modifier = Modifier.height(if (compact) 22.dp else 30.dp))
+            Spacer(modifier = Modifier.height(if (compact) 20.dp else 28.dp))
+
+            Text(
+                text = "What should we call you?",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Start
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = { if (it.length <= 24) name = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                placeholder = { Text("Your name") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PrimaryGreen,
+                    cursorColor = PrimaryGreen,
+                    focusedLabelColor = PrimaryGreen
+                )
+            )
+
+            Spacer(modifier = Modifier.height(if (compact) 16.dp else 22.dp))
 
             Button(
-                onClick = onGetStarted,
+                onClick = { onGetStarted(name.trim()) },
+                enabled = name.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(if (compact) 52.dp else 56.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = PrimaryGreen,
-                    contentColor = Color.White
+                    contentColor = Color.White,
+                    disabledContainerColor = PrimaryGreen.copy(alpha = 0.35f),
+                    disabledContentColor = Color.White.copy(alpha = 0.6f)
                 )
             ) {
                 Text(

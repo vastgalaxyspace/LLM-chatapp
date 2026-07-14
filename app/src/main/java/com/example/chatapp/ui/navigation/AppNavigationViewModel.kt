@@ -38,9 +38,9 @@ class AppNavigationViewModel @Inject constructor(
         }
     }
 
-    fun completeOnboarding() {
+    fun completeOnboarding(name: String) {
         viewModelScope.launch {
-            appPreferences.markOnboardingComplete()
+            appPreferences.completeOnboardingWithName(name)
         }
     }
 }

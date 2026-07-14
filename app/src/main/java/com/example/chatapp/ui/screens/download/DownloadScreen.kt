@@ -643,9 +643,9 @@ private fun ModelCard(
                 enabled = !isActive,
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isDownloaded) PrimaryGreen else Color(0xFF2A2A2A),
+                    containerColor = PrimaryGreen,
                     contentColor = Color(0xFF171006),
-                    disabledContainerColor = Color(0xFF2A2A2A).copy(alpha = 0.5f),
+                    disabledContainerColor = PrimaryGreen.copy(alpha = 0.4f),
                     disabledContentColor = Color.White.copy(alpha = 0.5f)
                 )
             ) {

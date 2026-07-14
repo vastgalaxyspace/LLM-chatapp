@@ -10,6 +10,7 @@ import com.example.chatapp.data.model.ModelCatalog
 import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.repository.ChatRepository
 import com.example.chatapp.data.repository.ContextWindowManager
+import com.example.chatapp.data.repository.ModelFileRepository
 import com.example.chatapp.domain.usecase.SendMessageUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -44,6 +45,7 @@ class ChatViewModelTest {
     private lateinit var localMediaStore: LocalMediaStore
     private lateinit var appPreferences: AppPreferences
     private lateinit var contextWindowManager: ContextWindowManager
+    private lateinit var modelFileRepository: ModelFileRepository
     private lateinit var messagesFlow: MutableStateFlow<List<ChatMessage>>
 
     @Before
@@ -59,7 +61,11 @@ class ChatViewModelTest {
         localMediaStore = mockk(relaxed = true)
         appPreferences = mockk(relaxed = true)
         contextWindowManager = ContextWindowManager()
+        modelFileRepository = mockk(relaxed = true)
         messagesFlow = MutableStateFlow<List<ChatMessage>>(emptyList())
+
+        every { modelFileRepository.observeDownloadedModelIds() } returns flowOf(setOf(ModelCatalog.QWEN_SMALL))
+        coEvery { modelFileRepository.downloadedModelIds() } returns setOf(ModelCatalog.QWEN_SMALL)
 
         every { appPreferences.selectedBackend } returns flowOf("GPU")
         every { appPreferences.temperature } returns flowOf(0.8f)
@@ -165,6 +171,7 @@ class ChatViewModelTest {
             localMediaStore = localMediaStore,
             contextWindowManager = contextWindowManager,
             appPreferences = appPreferences,
+            modelFileRepository = modelFileRepository,
             defaultDispatcher = dispatcher
         )
 }

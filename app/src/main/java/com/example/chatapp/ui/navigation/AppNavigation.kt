@@ -65,8 +65,8 @@ fun AppNavigation() {
     ) {
         composable(Routes.Onboarding) {
             OnboardingScreen(
-                onGetStarted = {
-                    appNavigationViewModel.completeOnboarding()
+                onGetStarted = { name ->
+                    appNavigationViewModel.completeOnboarding(name)
                     navController.navigate(Routes.Download) {
                         popUpTo(Routes.Onboarding) { inclusive = true }
                         launchSingleTop = true

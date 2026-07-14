@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.chatapp.data.local.ChatLocalStore
 import com.example.chatapp.data.local.ProfileStats
+import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.repository.ModelFileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,9 +28,16 @@ data class ProfileUiStats(
 class ProfileViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     chatLocalStore: ChatLocalStore,
-    modelFileRepository: ModelFileRepository
+    modelFileRepository: ModelFileRepository,
+    appPreferences: AppPreferences
 ) : ViewModel() {
     private val downloadedModelCount = modelFileRepository.observeDownloadedModelIds().map { it.size }
+
+    val userName: StateFlow<String> = appPreferences.userName.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ""
+    )
 
     val stats: StateFlow<ProfileUiStats> = combine(
         chatLocalStore.observeProfileStats(),

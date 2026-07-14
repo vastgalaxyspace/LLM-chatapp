@@ -28,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,9 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val profileStats = viewModel.stats.collectAsStateWithLifecycle()
+    val userName by viewModel.userName.collectAsStateWithLifecycle()
+    val displayName = userName.ifBlank { "InnoAI User" }
+    val avatarInitial = displayName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "I"
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val horizontalPad = when {
@@ -101,7 +105,7 @@ fun ProfileScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "I",
+                    text = avatarInitial,
                     style = MaterialTheme.typography.displayMedium,
                     color = PrimaryGreen,
                     fontWeight = FontWeight.Bold
@@ -111,7 +115,7 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "InnoAI User",
+                text = displayName,
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
@@ -238,6 +242,40 @@ fun ProfileScreen(
                     )
                 }
             }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { uriHandler.openUri("https://dailyorbitstudio.space") }
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(
+                                id = com.example.chatapp.R.drawable.dos
+                            ),
+                            contentDescription = "DailyOrbit Studio",
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .height(72.dp)
+                        )
+                        Text(
+                            text = "Developed by DailyOrbit Studio",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = PrimaryGreen,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "dailyorbitstudio.space",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF888888)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
                 }

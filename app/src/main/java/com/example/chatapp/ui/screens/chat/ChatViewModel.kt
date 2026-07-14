@@ -16,6 +16,7 @@ import com.example.chatapp.data.model.ModelOption
 import com.example.chatapp.data.preferences.AppPreferences
 import com.example.chatapp.data.repository.ChatRepository
 import com.example.chatapp.data.repository.ContextWindowManager
+import com.example.chatapp.data.repository.ModelFileRepository
 import com.example.chatapp.di.DefaultDispatcher
 import com.example.chatapp.domain.AssistantResponseCleaner
 import com.example.chatapp.domain.usecase.SendMessageUseCase
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -49,6 +51,7 @@ class ChatViewModel @Inject constructor(
     private val localMediaStore: LocalMediaStore,
     private val contextWindowManager: ContextWindowManager,
     private val appPreferences: AppPreferences,
+    private val modelFileRepository: ModelFileRepository,
     @DefaultDispatcher private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher
 ) : ViewModel() {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -92,6 +95,22 @@ class ChatViewModel @Inject constructor(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ModelCatalog.QWEN_SMALL
+    )
+
+    val isModelDownloaded: StateFlow<Boolean> = combine(
+        modelFileRepository.observeDownloadedModelIds(),
+        appPreferences.selectedModel
+    ) { downloaded, selected -> selected in downloaded }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false
+        )
+
+    val userName: StateFlow<String> = appPreferences.userName.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ""
     )
 
     val selectedModelName: StateFlow<String> = selectedModelId
@@ -139,6 +158,13 @@ class ChatViewModel @Inject constructor(
             _isLoading.value = true
             _errorMessage.value = null
 
+            val selected = appPreferences.selectedModel.first()
+            if (selected !in modelFileRepository.downloadedModelIds()) {
+                // No model on disk yet — chat input stays disabled until one is downloaded.
+                _isLoading.value = false
+                return@launch
+            }
+
             val result = withTimeoutOrNull(60_000L) {
                 val requestedBackend = backend.first()
                 chatRepository.initializeEngine(requestedBackend)
@@ -162,6 +188,11 @@ class ChatViewModel @Inject constructor(
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _isGenerating.value || _isLoading.value) return
 
+        if (!isModelDownloaded.value || !chatRepository.isEngineReady()) {
+            _errorMessage.value = "Please download and load a model before chatting."
+            return
+        }
+
         val selectedModel = ModelCatalog.fromId(selectedModelId.value)
         val attachments = pendingAttachmentsForPrompt(selectedModel).getOrElse {
             _errorMessage.value = it.message
@@ -179,6 +210,11 @@ class ChatViewModel @Inject constructor(
     /** FIX: bridge for regenerations */
     fun retryMessage(messageId: String) {
         if (_isGenerating.value || _isLoading.value) return
+
+        if (!isModelDownloaded.value || !chatRepository.isEngineReady()) {
+            _errorMessage.value = "Please download and load a model before chatting."
+            return
+        }
 
         val currentMsgs = _messages.value
         val assistantIdx = currentMsgs.indexOfFirst { it.id == messageId && it.role == MessageRole.AI }

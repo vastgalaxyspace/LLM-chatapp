@@ -65,6 +65,8 @@ fun ChatScreen(
     val conversationHistory by viewModel.conversationHistory.collectAsStateWithLifecycle()
     val selectedModelName by viewModel.selectedModelName.collectAsStateWithLifecycle()
     val contextWindowPercent by viewModel.contextWindowPercent.collectAsStateWithLifecycle()
+    val isModelDownloaded by viewModel.isModelDownloaded.collectAsStateWithLifecycle()
+    val userName by viewModel.userName.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -84,7 +86,7 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(Unit) { viewModel.initEngine() }
+    LaunchedEffect(isModelDownloaded) { viewModel.initEngine() }
 
     LaunchedEffect(initialConversationId) { viewModel.openConversation(initialConversationId) }
 
@@ -111,6 +113,7 @@ fun ChatScreen(
                 ChatHistoryDrawer(
                     historyItems = conversationHistory,
                     activeConversationId = activeConversationId,
+                    userName = userName,
                     onNewChat = {
                         viewModel.startNewConversation()
                         scope.launch { drawerState.close() }
@@ -142,6 +145,8 @@ fun ChatScreen(
                 ChatBottomInputArea(
                     isGenerating = isGenerating,
                     isLoading = isLoading,
+                    isModelReady = isModelDownloaded,
+                    onOpenModels = onOpenModels,
                     tokensPerSec = generationTokensPerSecond,
                     ttft = timeToFirstTokenMillis,
                     suggestedText = suggestedPrompt,
@@ -201,6 +206,8 @@ fun ChatScreen(
 private fun ChatBottomInputArea(
     isGenerating: Boolean,
     isLoading: Boolean,
+    isModelReady: Boolean,
+    onOpenModels: (() -> Unit)?,
     tokensPerSec: Float?,
     ttft: Long?,
     suggestedText: String?,
@@ -227,10 +234,27 @@ private fun ChatBottomInputArea(
             }
         }
 
+        AnimatedVisibility(visible = !isModelReady) {
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+                Surface(
+                    shape = RoundedCornerShape(99.dp),
+                    color = MaterialTheme.colorScheme.chipBackground,
+                    onClick = { onOpenModels?.invoke() }
+                ) {
+                    Text(
+                        text = "Download a model to start chatting  →",
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = PrimaryGreen
+                    )
+                }
+            }
+        }
+
         Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
             MessageInput(
                 isGenerating = isGenerating,
-                enabled = !isLoading,
+                enabled = !isLoading && isModelReady,
                 suggestedText = suggestedText,
                 onSuggestionConsumed = onSuggestionConsumed,
                 onSend = onSend,
@@ -304,6 +328,7 @@ private fun ChatTopBar(
 private fun ChatHistoryDrawer(
     historyItems: List<ConversationSummary>,
     activeConversationId: Long?,
+    userName: String,
     onNewChat: () -> Unit,
     onOpenConversation: (Long) -> Unit,
     onDeleteConversation: (Long) -> Unit,
@@ -362,9 +387,13 @@ private fun ChatHistoryDrawer(
                 modifier = Modifier.size(30.dp).background(PrimaryGreen.copy(alpha = 0.14f), RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("I", color = PrimaryGreen, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    userName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "I",
+                    color = PrimaryGreen,
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
-            Text("InnoAI User", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(userName.ifBlank { "InnoAI User" }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 

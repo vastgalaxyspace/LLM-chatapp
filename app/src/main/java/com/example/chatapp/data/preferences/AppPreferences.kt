@@ -29,6 +29,14 @@ class AppPreferences @Inject constructor(
         val HuggingFaceToken = stringPreferencesKey("hugging_face_token")
         val HasCompletedOnboarding = androidx.datastore.preferences.core.booleanPreferencesKey("has_completed_onboarding")
         val IsDarkTheme = androidx.datastore.preferences.core.booleanPreferencesKey("is_dark_theme")
+        val UserName = stringPreferencesKey("user_name")
+    }
+
+    val userName: Flow<String> = context.dataStore.data.map { it[Keys.UserName]?.takeIf { name -> name.isNotBlank() } ?: "" }
+
+    suspend fun updateUserName(value: String) {
+        val trimmed = value.trim()
+        context.dataStore.edit { it[Keys.UserName] = trimmed }
     }
 
     val isDarkTheme: Flow<Boolean> = context.dataStore.data.map { it[Keys.IsDarkTheme] ?: true }
@@ -90,5 +98,13 @@ class AppPreferences @Inject constructor(
 
     suspend fun markOnboardingComplete() {
         context.dataStore.edit { it[Keys.HasCompletedOnboarding] = true }
+    }
+
+    suspend fun completeOnboardingWithName(name: String) {
+        val trimmed = name.trim()
+        context.dataStore.edit {
+            if (trimmed.isNotEmpty()) it[Keys.UserName] = trimmed
+            it[Keys.HasCompletedOnboarding] = true
+        }
     }
 }
