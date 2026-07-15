@@ -260,9 +260,7 @@ fun ProfileScreen(
                             ),
                             contentDescription = "DailyOrbit Studio",
                             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxWidth(0.5f)
-                                .height(72.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                         Text(
                             text = "Developed by DailyOrbit Studio",

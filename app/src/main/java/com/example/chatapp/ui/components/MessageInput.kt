@@ -18,9 +18,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowUpward
-import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,9 +38,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import com.example.chatapp.ui.theme.PrimaryGreen
 import com.example.chatapp.ui.theme.chipBackground
@@ -56,11 +63,54 @@ fun MessageInput(
 ) {
     var text by remember { mutableStateOf(TextFieldValue("")) }
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
 
     LaunchedEffect(suggestedText) {
         suggestedText?.let {
             text = TextFieldValue(it)
             onSuggestionConsumed()
+        }
+    }
+
+    // Speech-to-text: transcript is merged onto whatever was typed before the mic started.
+    var speechBaseText by remember { mutableStateOf("") }
+    fun mergeTranscript(spoken: String): String =
+        if (speechBaseText.isBlank()) spoken else "${speechBaseText.trimEnd()} $spoken"
+
+    val speech = rememberSpeechToTextController(
+        onPartial = { partial ->
+            val merged = mergeTranscript(partial)
+            text = TextFieldValue(merged, selection = androidx.compose.ui.text.TextRange(merged.length))
+        },
+        onFinal = { final ->
+            val merged = mergeTranscript(final)
+            text = TextFieldValue(merged, selection = androidx.compose.ui.text.TextRange(merged.length))
+            speechBaseText = merged
+        }
+    )
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            speechBaseText = text.text
+            speech.start()
+        }
+    }
+
+    fun toggleListening() {
+        if (speech.isListening) {
+            speech.stop()
+            return
+        }
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            speechBaseText = text.text
+            speech.start()
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -141,6 +191,32 @@ fun MessageInput(
                     }
                 )
 
+                val showMic = speech.isAvailable && !isGenerating
+                if (showMic) {
+                    val micActive = speech.isListening
+                    IconButton(
+                        onClick = { if (enabled) toggleListening() },
+                        enabled = enabled,
+                        modifier = Modifier
+                            .size(actionSize)
+                            .background(
+                                color = if (micActive) PrimaryGreen else Color.Transparent,
+                                shape = CircleShape
+                            )
+                    ) {
+                        Icon(
+                            imageVector = if (micActive) Icons.Rounded.Stop else Icons.Rounded.Mic,
+                            contentDescription = if (micActive) "Stop listening" else "Speak",
+                            tint = when {
+                                micActive -> Color(0xFF171006)
+                                enabled -> colors.onSurfaceVariant
+                                else -> colors.textHint
+                            },
+                            modifier = Modifier.size(if (compact) 18.dp else 20.dp)
+                        )
+                    }
+                }
+
                 IconButton(
                     onClick = {
                         if (isGenerating) {
@@ -153,16 +229,13 @@ fun MessageInput(
                             }
                         }
                     },
+                    enabled = isGenerating || canSend,
                     modifier = Modifier
                         .size(actionSize)
                         .background(color = sendButtonColor, shape = CircleShape)
                 ) {
                     Icon(
-                        imageVector = when {
-                            isGenerating -> Icons.Rounded.Stop
-                            hasText -> Icons.Rounded.ArrowUpward
-                            else -> Icons.Rounded.GraphicEq
-                        },
+                        imageVector = if (isGenerating) Icons.Rounded.Stop else Icons.Rounded.ArrowUpward,
                         contentDescription = if (isGenerating) "Stop generation" else "Send message",
                         tint = sendIconColor,
                         modifier = Modifier.size(if (compact) 18.dp else 20.dp)
